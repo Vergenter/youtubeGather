@@ -1,0 +1,36 @@
+{
+    "kind": "youtube#searchResult",
+    "etag": "awPzUxZZpGCSy_4sVXKqQuYZjaU",
+    "id": {
+        "kind": "youtube#video",
+        "videoId": "YzyveZdGgig"
+    },
+    "snippet": {
+        "publishedAt": "2014-11-13T23:00:03Z",
+        "channelId": "UCxvwP361203MCu7yyOnmZKA",
+        "title": "MINECRAFT PS4 - A FESTA DOS ALDEÕES e notícia importante",
+        "description": "Os Piratas Canal do Davy - https://www.youtube.com/user/gameplayrj Canal do Igor - https://www.youtube.com/user/yt3coelhos Canal do Cross ...",
+        "thumbnails": {
+            "default": {
+                "url": "https://i.ytimg.com/vi/YzyveZdGgig/default.jpg",
+                "width": 120,
+                "height": 90
+            },
+            "medium": {
+                "url": "https://i.ytimg.com/vi/YzyveZdGgig/mqdefault.jpg",
+                "width": 320,
+                "height": 180
+            },
+            "high": {
+                "url": "https://i.ytimg.com/vi/YzyveZdGgig/hqdefault.jpg",
+                "width": 480,
+                "height": 360
+            }
+        },
+        "channelTitle": "Bruno GAMEPLAY",
+        "liveBroadcastContent": "none",
+        "publishTime": "2014-11-13T23:00:03Z"
+    },
+    "gameTitle": "Minecraft",
+    "gameSubtitle": "2011"
+}
