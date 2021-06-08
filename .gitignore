@@ -3,3 +3,4 @@ neo4j/*/*
 __pycache__
 .vscode
 .env
+.cache
