@@ -8,6 +8,7 @@ import json
 from acquire.VideoApiGather import query_by_keyword, query_by_relative_id
 from process.VideoProcess import process
 from models.Video import Video, Channel, Game, fromJson
+import datetime
 DEFAULT_GAMES = []
 DEFAULT_VIDEOS_COUNT = 0
 logging.basicConfig(filename='logs//video_gather.log', level=logging.INFO)
@@ -52,6 +53,7 @@ def process_game(game_title, expected_video_count):
 def main():
     with open('config//games.yaml', 'r', encoding='utf-8') as f:
         parsed_yaml_file = yaml.load(f, Loader=yaml.FullLoader)
+    logging.info(f"starting {datetime.datetime.now()}")
     games = parsed_yaml_file.get("games", DEFAULT_GAMES)
     videos_count = parsed_yaml_file.get("videos", DEFAULT_VIDEOS_COUNT)
     for game_title in games:
