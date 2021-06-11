@@ -32,6 +32,22 @@ class TestJsonParsing(unittest.TestCase):
         basic_data["snippet"]["description"] = ''
         isVideoEnglish(basic_data)
 
+    def test_parse_language_whitespace_description(self):
+        with open('src//tests//resources//whitespaceDescription.json', 'r', encoding='utf-8') as f:
+            whitespaceDescription = json.load(f)
+        isVideoEnglish(whitespaceDescription)
+
+    def test_parse_language_dot_description(self):
+        with open('src//tests//resources//basicItem.json', 'r', encoding='utf-8') as f:
+            basic_data = json.load(f)
+        basic_data["snippet"]["description"] = '.'
+        isVideoEnglish(basic_data)
+
+    def test_parse_language_for_english(self):
+        with open('src//tests//resources//basicEnglish.json', 'r', encoding='utf-8') as f:
+            basicEnglish = json.load(f)
+        self.assertTrue(isVideoEnglish(basicEnglish))
+
     def test_processing(self):
         with open('src//tests//resources//basicItem.json', 'r', encoding='utf-8') as f:
             basic_data = json.load(f)

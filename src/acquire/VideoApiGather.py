@@ -39,7 +39,7 @@ def fetching(request, youtubeSearch, video_limit: int, maxSingeQueryResults: int
             items.extend(response["items"])
         except HttpError as err:
             logging.error(err._get_reason())
-            break
+            raise
         if iteration > 0:
             request = youtubeSearch.list_next(request, response)
     logging.info(f"fetched {len(items)} videos")
