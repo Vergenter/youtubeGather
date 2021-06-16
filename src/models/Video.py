@@ -1,30 +1,24 @@
-from py2neo.ogm import Model, Property, RelatedFrom, RelatedTo
+""" Define Models"""
+# pylint: disable=C0103”
 from datetime import datetime
+from py2neo.ogm import Model, Property, RelatedFrom, RelatedTo
+from models.Game import Game
+from models.Channel import Channel
 
 
-class Game(Model):
-    __primarylabel__ = "Game"
-    __primarykey__ = "title"
-    title = Property()
-    year = Property()
-    videos = RelatedTo("Video", "OF_GAME")
+class Video_stub(Model):
+    """Video object model"""
+    __primarylabel__ = "Video"
+    __primarykey__ = "videoId"
+    comment = RelatedFrom("Comment", "TO")
+    videoId = Property()
 
-    def __init__(self, title: str, year: int):
-        self.title = title
-        self.year = year
-
-
-class Channel(Model):
-    __primarylabel__ = "Channel"
-    __primarykey__ = "channelId"
-    channelId = Property()
-    videos = RelatedTo("Video", "OWNED_BY")
-
-    def __init__(self, channelId: str):
-        self.channelId = channelId
+    def __init__(self, videoId: str):
+        self.videoId = videoId
 
 
 class Video(Model):
+    """Video object model"""
     __primarylabel__ = "Video"
     __primarykey__ = "videoId"
     videoId = Property()
@@ -34,10 +28,11 @@ class Video(Model):
     title = Property()
     description = Property()
     liveBroadcastContent = Property()
-    game = RelatedFrom(Game, "OF_GAME")
-    channel = RelatedFrom(Channel, "OWNED_BY")
+    game = RelatedTo(Game, "OF_GAME")
+    channel = RelatedTo(Channel, "OWNED_BY")
 
-    def __init__(self, videoId: str, etag: str, publishedAt: datetime, publishTime: datetime, title: str, description: str, liveBroadcastContent: bool):
+    def __init__(self, videoId: str, etag: str, publishedAt: datetime,
+                 publishTime: datetime, title: str, description: str, liveBroadcastContent: bool):
         self.videoId = videoId
         self.etag = etag
         self.publishedAt = publishedAt
@@ -48,6 +43,7 @@ class Video(Model):
 
 
 def fromJson(json):
+    """Create Video model with relationships from json"""
     channel = Channel(channelId=json["snippet"]["channelId"])
     game = Game(title=json["gameTitle"], year=json["gameSubtitle"])
     video = Video(
@@ -61,7 +57,7 @@ def fromJson(json):
         description=json["snippet"]["description"],
         liveBroadcastContent=json["snippet"]["liveBroadcastContent"] != "none",
     )
-    if(game.title is not None):
+    if game.title is not None:
         video.game.add(game)
     video.channel.add(channel)
     return video

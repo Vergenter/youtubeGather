@@ -1,0 +1,58 @@
+{
+    "kind": "youtube#commentThread",
+    "etag": "DcgmtWrA9-sKm6EiPRwz1GLvVgc",
+    "id": "UgwRRBN1G4cxC3mmdYJ4AaABAg",
+    "snippet": {
+        "videoId": "RJ0jdO5ZfU4",
+        "topLevelComment": {
+            "kind": "youtube#comment",
+            "etag": "dhlSwK6ux3RzRh1O9oWXpwfLAFY",
+            "id": "UgwRRBN1G4cxC3mmdYJ4AaABAg",
+            "snippet": {
+                "videoId": "RJ0jdO5ZfU4",
+                "textDisplay": "Me as a girl rn:how is he so good i-i",
+                "textOriginal": "Me as a girl rn:how is he so good i-i",
+                "authorDisplayName": "Denver De Lara",
+                "authorProfileImageUrl": "https://yt3.ggpht.com/ytc/AAUvwnic6Z1EMe7S8foqRA6ywcAg8uqIG3tLT9BPdQ=s48-c-k-c0x00ffffff-no-rj",
+                "authorChannelUrl": "http://www.youtube.com/channel/UCPZO4YORBz2HAvEBjFgydQw",
+                "authorChannelId": {
+                    "value": "UCPZO4YORBz2HAvEBjFgydQw"
+                },
+                "canRate": true,
+                "viewerRating": "none",
+                "likeCount": 0,
+                "publishedAt": "2021-06-15T03:35:54Z",
+                "updatedAt": "2021-06-15T03:35:54Z"
+            }
+        },
+        "canReply": true,
+        "totalReplyCount": 1,
+        "isPublic": true
+    },
+    "replies": {
+        "comments": [
+            {
+                "kind": "youtube#comment",
+                "etag": "gHkPUs5zGsrmDPM4mnv9O0bf8C8",
+                "id": "UgwRRBN1G4cxC3mmdYJ4AaABAg.9OaZmVD-xDT9OaaErYRngH",
+                "snippet": {
+                    "videoId": "RJ0jdO5ZfU4",
+                    "textDisplay": "cringe",
+                    "textOriginal": "cringe",
+                    "parentId": "UgwRRBN1G4cxC3mmdYJ4AaABAg",
+                    "authorDisplayName": "ExtraBingo10",
+                    "authorProfileImageUrl": "https://yt3.ggpht.com/ytc/AAUvwngPXa6Q43ZvsdZKbF9d5iAT0cAV15tx40ynB_X3Rg=s48-c-k-c0x00ffffff-no-rj",
+                    "authorChannelUrl": "http://www.youtube.com/channel/UC5cQRW8WkvUI29pHmSURuKw",
+                    "authorChannelId": {
+                        "value": "UC5cQRW8WkvUI29pHmSURuKw"
+                    },
+                    "canRate": true,
+                    "viewerRating": "none",
+                    "likeCount": 0,
+                    "publishedAt": "2021-06-15T03:48:39Z",
+                    "updatedAt": "2021-06-15T03:48:39Z"
+                }
+            }
+        ]
+    }
+}
