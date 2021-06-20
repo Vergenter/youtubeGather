@@ -1,7 +1,31 @@
+from typing import NamedTuple
 from datetime import datetime
 from py2neo.ogm import Model, Property, RelatedFrom, RelatedTo
 from models.Video import Video_stub
 from models.Channel import Channel
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass(frozen=True)
+class Comment_dc:
+    commentId: str
+    etag: str
+    publishedAt: datetime
+    updatedAt: datetime
+    likeCount: int
+    totalReplyCount: int
+    textOriginal: str
+
+    def __hash__(self):
+        return self.commentId
+
+
+class Full_comment(NamedTuple):
+    comment: Comment_dc
+    channelId: str
+    videoId: str
+    parent: Optional[str]
 
 
 class Comment(Model):
@@ -52,7 +76,7 @@ def getComment(json, replyCount=0):
     return comment
 
 
-def fromJson(json):
+def fromJson(json, replyCount=0):
     """Create Comment model with relationships from json"""
     topLevelComment = getComment(
         json["snippet"]["topLevelComment"], json["snippet"]["totalReplyCount"])

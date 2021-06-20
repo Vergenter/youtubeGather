@@ -1,6 +1,15 @@
 from datetime import datetime
 from py2neo.ogm import Model, Property, RelatedFrom, RelatedTo
 
+from dataclasses import dataclass
+from neo4j.time import DateTime
+from typing import Optional
+
+
+@dataclass
+class Channel_stub_dc:
+    channelId: str
+
 
 class Channel(Model):
     """Channel id object model"""
