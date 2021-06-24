@@ -122,9 +122,10 @@ CREATE (comment)-[:TO]->(parent)
 '''
 
 comment_2_query = '''
+
 UNWIND $rows AS row
 MATCH (video:Video{videoId: row.video.videoId})
-MERGE (comment:Comment{
+CREATE (comment:Comment{
     commentId: row.comment.commentId,
     etag: row.comment.etag,
     publishedAt: row.comment.publishedAt,
@@ -134,10 +135,10 @@ MERGE (comment:Comment{
     textOriginal: row.comment.textOriginal}
 )
 MERGE (channel:Channel{channelId: row.channel.channelId})
-MERGE (comment)-[:OWNED_BY]->(channel)
-MERGE (comment)-[:TO]->(video)
+CREATE (comment)-[:OWNED_BY]->(channel)
+CREATE (comment)-[:TO]->(video)
 
 WITH comment,row
 MATCH (parent:Comment{commentId: row.parentId})
-MERGE (comment)-[:TO]->(parent)
+CREATE (comment)-[:TO]->(parent)
 '''

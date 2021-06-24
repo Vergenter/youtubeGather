@@ -50,7 +50,7 @@ class Neo4jConnection:
         assert self.__driver is not None, "Driver not initialized!"
 
         total = 0
-        total_bathes = (rows+batch_size-1)//batch_size
+        total_bathes = (len(rows)+batch_size-1)//batch_size
         batch = 0
         start = time()
         logging.info("[INSERTING] starting %s", datetime.datetime.now())

@@ -18,7 +18,6 @@ class Video_dc:
     videoId: str
     etag: str
     publishedAt: datetime
-    publishTime: datetime
     title: str
     description: str
     liveBroadcastContent: bool
@@ -48,11 +47,10 @@ def fromJson(json):
     channel = Channel_dc(channelId=json["snippet"]["channelId"])
     game = Game_dc(title=json["gameTitle"], year=json["gameSubtitle"])
     video = Video_dc(
-        videoId=json["id"]["videoId"],
+        videoId=json["id"] if type(
+            json["id"]) == str else json["id"]["videoId"],  # to work for all forms
         etag=json["etag"],
         publishedAt=datetime.strptime(json["snippet"]["publishedAt"],
-                                      '%Y-%m-%dT%H:%M:%SZ'),
-        publishTime=datetime.strptime(json["snippet"]["publishTime"],
                                       '%Y-%m-%dT%H:%M:%SZ'),
         title=json["snippet"]["title"],
         description=json["snippet"]["description"],
@@ -64,12 +62,11 @@ def fromJson(json):
 video_query = '''
 UNWIND $rows AS row
 MERGE (channel:Channel{channelId: row.channel.channelId})
-MERGE (game:Game{title: row.game.title})
+MERGE (game:Game{title: row.game.title, year:row.game.year})
 CREATE (video:Video{
     videoId: row.video.videoId,
     etag: row.video.etag,
     publishedAt: row.video.publishedAt,
-    publishTime: row.video.publishTime,
     title: row.video.title,
     description: row.video.description,
     liveBroadcastContent: row.video.liveBroadcastContent}

@@ -2,8 +2,8 @@
 import asyncio
 import logging
 from typing import Set, Tuple, Any, Callable, TypeVar
-from process.language.LanguageProcessor import isVideoEnglish
-from process.title.TitleProcessor import getVideoGameTitle
+from process.language.processor import isVideoInCorrectLanguage
+from process.title.processor import getVideoGameTitle
 
 MINIMUM_PROCESS_EFFECIENCY = 0.1
 
@@ -18,8 +18,8 @@ def has_snippet(item):
     return item.get("snippet") is not None
 
 
-def has_correct_label(gameLabel) -> Callable[[Any], bool]:
-    return lambda item: item["gameTitle"] == gameLabel and item["gameSubtitle"] != None
+def has_correct_label(gameLabel: 'list[str]') -> Callable[[Any], bool]:
+    return lambda item: item["gameTitle"] in gameLabel and item["gameSubtitle"] != None
 
 
 T = TypeVar('T')
@@ -32,27 +32,30 @@ def filter_with_logging(predicate: Callable[[T], bool], message: str, data_and_l
     return result, resultLen
 
 
-def process(items, gameLabel, processed_ids: Set):
+def process(items, languages, games, processed_ids: Set):
     item_count = len(items)
     logging.info("[PROCESS] processing items: %d", item_count)
 
     filtered_by_processed_items = filter_with_logging(
-        lambda x: x["id"]["videoId"] not in processed_ids, "repeated items", (items, item_count))
+        lambda x: x["id"] if type(
+            x["id"]) == str else x["id"]["videoId"] not in processed_ids, "repeated items", (items, item_count))
 
-    processed_ids.update(x["id"]["videoId"]
-                         for x in filtered_by_processed_items[0])
+    processed_ids.update(x["id"] if type(
+        x["id"]) == str else x["id"]["videoId"]
+        for x in filtered_by_processed_items[0])
     filtered_by_having_snippet = filter_with_logging(
         has_snippet, "have no snippet", filtered_by_processed_items)
 
     filtered_by_language = filter_with_logging(
-        isVideoEnglish, "non english videos", filtered_by_having_snippet)
+        lambda x: isVideoInCorrectLanguage(languages, x), "incorrect languages videos", filtered_by_having_snippet)
 
     loop = asyncio.get_event_loop()
     titles = loop.run_until_complete(asyncio.gather(
-        *(getVideoGameTitle(item["id"]["videoId"]) for item in filtered_by_language[0])))
+        *(getVideoGameTitle(item["id"] if type(
+            item["id"]) == str else item["id"]["videoId"]) for item in filtered_by_language[0])))
 
     filtered_by_game_title = filter_with_logging(
-        has_correct_label(gameLabel), "incorrect or undefined titles", (list(map(
+        has_correct_label(games), "incorrect or undefined titles", (list(map(
             add_title, zip(titles, filtered_by_language[0]))), filtered_by_language[1]))
     if filtered_by_game_title[1]/item_count < MINIMUM_PROCESS_EFFECIENCY:
         raise RuntimeError("Too low items go through filtering")

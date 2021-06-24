@@ -46,19 +46,16 @@ def query_by_video_id(video_id: str, iteration_limit: int = MAX_INT32):
         return items[:lastLenght], quota_exceeded
 
 
-def query_by_comment_id(comment_ids_group: 'list[str]', iteration_limit: int = MAX_INT32):
+def query_by_comment_id(comment_id: str, iteration_limit: int = MAX_INT32):
     max_singe_query_results = 100
-    ids = ",".join(comment_ids_group)
     youtube_thread = youtube.comments()  # type: ignore pylint: disable=E1101
     request = youtube_thread.list(
         part="snippet,id",
-        parentId=ids,
+        parentId=comment_id,
         maxResults=max_singe_query_results
     )
     items = empty(10000, dtype=object)
     iteration = 0
-    start = time()
-    logging.info("[FETCHING] started for %s", ids)
     quota_exceeded = False
     lastLenght = 0
     try:
@@ -66,7 +63,7 @@ def query_by_comment_id(comment_ids_group: 'list[str]', iteration_limit: int = M
             iteration += 1
             response = request.execute()
             if len(response["items"]) == 0:
-                HttpError(response, "Quota not logged error")
+                HttpError(response, "Incorrect value of items")
             response_items = lastLenght+len(response["items"])
             items[lastLenght:response_items] = response["items"]
             lastLenght = response_items
@@ -77,6 +74,4 @@ def query_by_comment_id(comment_ids_group: 'list[str]', iteration_limit: int = M
         logging.error(str(err))
         quota_exceeded = True
     finally:
-        logging.info("fetched %d comments in time: %d",
-                     lastLenght, int(time()-start))
         return items[:lastLenght], quota_exceeded

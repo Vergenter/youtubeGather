@@ -12,12 +12,12 @@ youtube = build(developerKey=DEVELOPER_KEY,
 MAX_INT32 = 2147483647
 
 
-def query_by_keyword(game_title: str, video_limit: int = MAX_INT32):
+def query_by_keyword(keyword: str, video_limit: int = MAX_INT32):
     """search vieos matching game_title"""
     max_singe_query_results = 50
     youtube_search = youtube.search()  # type: ignore pylint: disable=E1101
     request = youtube_search.list(part="snippet", maxResults=max_singe_query_results,
-                                  q=game_title, relevanceLanguage="en", regionCode="US",
+                                  q=keyword, relevanceLanguage="en", regionCode="US",
                                   type="video")
     return fetching(request, youtube_search, video_limit, max_singe_query_results)
 
@@ -36,17 +36,22 @@ def fetching(request, youtube_search, video_limit: int, max_singe_query_results:
     """fetch selected video count for request"""
     items = []
     iteration = 0
+    quota_exceeded = False
     iteration_limit = int(
         (video_limit+max_singe_query_results-1)//max_singe_query_results)
-    while request is not None and iteration < iteration_limit:
-        iteration += 1
-        try:
+    try:
+        while request is not None and iteration < iteration_limit:
+            iteration += 1
+
             response = request.execute()
             items.extend(response["items"])
-        except HttpError as err:
-            logging.error(str(err))
-            raise
-        if iteration > 0:
-            request = youtube_search.list_next(request, response)
-    logging.info("fetched %d videos", len(items))
-    return items
+
+            if iteration > 0:
+                request = youtube_search.list_next(request, response)
+
+    except HttpError as err:
+        logging.error(str(err))
+        quota_exceeded = True
+    finally:
+        logging.info("fetched %d videos", len(items))
+        return items, quota_exceeded
