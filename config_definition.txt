@@ -1,0 +1,26 @@
+search:
+    state: boolean
+    languages: list[str]
+    games: list[str]
+    limit: int
+
+include:
+    state: boolean
+    videos: list[str]
+    channels: list[str]
+
+channels:
+    state: boolean
+    update_frequency: int
+    get_videos: boolean
+    latest_videos_percent: float
+
+videos:
+    state: boolean
+    update_frequency: int
+    get_comments: boolean
+
+comments:
+    state: boolean
+    update_frequency: int
+    get_replies: boolean
