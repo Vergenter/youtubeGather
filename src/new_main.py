@@ -19,7 +19,7 @@ modules = {
 
 
 def main():
-    ray.init(address='auto', _redis_password='5241590000000000')
+    ray.init()
     dir_path = os.path.dirname(os.path.realpath(__file__))
     config_path = 'config//policy.yaml'
     file_path = os.path.join(dir_path, config_path)

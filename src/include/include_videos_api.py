@@ -23,9 +23,9 @@ def fetch_videos(videos_id: 'set[str]'):
 
     items = []
     ids = ",".join(videos_id)
-    request = self.resource.list(part="snippet",  # type: ignore pylint: disable=E1101
+    request = resource.list(part="snippet",  # type: ignore pylint: disable=E1101
                                  id=ids,
-                                 maxResults=self.max_singe_query_results)
+                                 maxResults=max_singe_query_results)
     while request is not None:
         response = api.execute(request)
         items.extend(response["items"])
@@ -36,6 +36,7 @@ def fetch_videos(videos_id: 'set[str]'):
 
 @dataclass
 class GIncludeVideoManager:
+    max_singe_query_results = 50
 
     api: APIConnector
     resource: googleapiclient.discovery.Resource
@@ -52,7 +53,7 @@ class GIncludeVideoManager:
         resource = service.videos()  # type: ignore pylint: disable=E1101
         return cls(api=api, resource=resource)
 
-    def list(self, video_ids: 'set[str]') -> list[dict]:
+    def list(self, video_ids: 'set[str]') -> 'list[dict]':
         items = []
         ids = ",".join(video_ids)
         request = self.resource.list(part="snippet",  # type: ignore pylint: disable=E1101

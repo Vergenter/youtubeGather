@@ -5,7 +5,7 @@ import ray
 
 
 def main(data: include):
-    ids = [fetch_videos.remote(set(list(i))) for i in set(data.videos)]
-    ready_ids, _ = ray.wait(ids, num_returns=len(ids))
-    result = ray.get(ready_ids)
+    # result = fetch_videos.remote(set(data.videos))
+    ids = [fetch_videos.remote({i}) for i in set(data.videos)]
+    result = ray.get(ids)
     print(result)
