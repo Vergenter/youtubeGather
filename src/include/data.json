@@ -1,0 +1,124 @@
+[
+    [
+        {
+            "kind": "youtube#video",
+            "etag": "UEUM3EZ1-lpvAEYZ5dms1weZKd0",
+            "id": "9_s3h_GVzZc",
+            "snippet": {
+                "publishedAt": "2019-12-15T18: 24: 40Z",
+                "channelId": "UCdngmbVKX1Tgre699-XLlUA",
+                "title": "Docker vs Kubernetes vs Docker Swarm | Comparison in 5 mins",
+                "description": "What is the difference between Docker and Kubernetes? And Kubernetes or Docker Swarm?\nIn my video \"Docker vs Kubernetes vs Docker Swarm\" I compare both Docker and Kubernetes and Kubernetes vs Docker Swarm.\n\n► Subscribe To Me On Youtube: https: //bit.ly/2z5rvTV\n\n▬▬▬▬▬▬ T I M E S T A M P S ⏰  ▬▬▬▬▬▬\n0:00 - Intro\n0:38 - Comparison Docker and Kubernetes\n1:40 - Docker and Kubernetes in the software development process\n2:42 - Kubernetes in Detail\n3:21 - Differences of Kubernetes and Docker Swarm\n\nKubernetes and Docker are not competing technologies. In fact, they actually complement one another to get the best out of both. In contrast, Docker Swarm is the comparable technology to Kubernetes.\n\n#kubernetes #devops #techworldwithnana #docker #dockertutorials\n\n▬▬▬▬▬▬ Want to learn more? 🚀  ▬▬▬▬▬▬ \nFull Kubernetes and Docker tutorial              ►  https://bit.ly/2YGeRp9\nWhat is Kubernetes?                                        ►  https://youtu.be/VnvRFRk_51k\nComplete Jenkins Pipeline Tutorial               ►  https://youtu.be/7KCS70sCoK0\n\n\n▬▬▬▬▬▬ Maybe interesting for you 😎   ▬▬▬▬▬▬ \nKubernetes 101 - cheatsheet for your work (ebook bundle with visuals)      ► https://bit.ly/3mPIaiU\n\n\n▬▬▬▬▬▬ Connect with me 👋   ▬▬▬▬▬▬ \nJoin private Facebook group      ►  https://bit.ly/32UVSZP\nDon\"t forget to subscribe             ►  https://bit.ly/3mO4jxT\nDEV                                                 ►  https://bit.ly/3h2fqiO\nINSTAGRAM                                  ►  https://bit.ly/2F3LXYJ\nTWITTER                                        ►  https://bit.ly/3i54PUB\nLINKEDIN                                       ►  https://bit.ly/3hWOLVT",
+                "thumbnails": {
+                    "default": {
+                        "url": "https://i.ytimg.com/vi/9_s3h_GVzZc/default.jpg",
+                        "width": 120,
+                        "height": 90
+                    },
+                    "medium": {
+                        "url": "https://i.ytimg.com/vi/9_s3h_GVzZc/mqdefault.jpg",
+                        "width": 320,
+                        "height": 180
+                    },
+                    "high": {
+                        "url": "https://i.ytimg.com/vi/9_s3h_GVzZc/hqdefault.jpg",
+                        "width": 480,
+                        "height": 360
+                    },
+                    "standard": {
+                        "url": "https://i.ytimg.com/vi/9_s3h_GVzZc/sddefault.jpg",
+                        "width": 640,
+                        "height": 480
+                    },
+                    "maxres": {
+                        "url": "https://i.ytimg.com/vi/9_s3h_GVzZc/maxresdefault.jpg",
+                        "width": 1280,
+                        "height": 720
+                    }
+                },
+                "channelTitle": "TechWorld with Nana",
+                "tags": [
+                    "docker vs kubernetes",
+                    "kubernetes vs docker",
+                    "docker swarm vs kubernetes",
+                    "kubernetes vs docker swarm",
+                    "kubernetes docker",
+                    "kubernetes docker swarm",
+                    "kubernetes vs docker compose",
+                    "docker",
+                    "difference docker and kubernetes",
+                    "difference kubernetes and docker swarm",
+                    "difference between kubernetes and docker",
+                    "kubernetes or docker",
+                    "docker vs kubernetes difference",
+                    "docker swarm or kubernetes",
+                    "kubernetes and docker",
+                    "techworld with nana",
+                    "docker with kubernetes",
+                    "docker swarm"
+                ],
+                "categoryId": "27",
+                "liveBroadcastContent": "none",
+                "localized": {
+                    "title": "Docker vs Kubernetes vs Docker Swarm | Comparison in 5 mins",
+                    "description": "What is the difference between Docker and Kubernetes? And Kubernetes or Docker Swarm?\nIn my video \"Docker vs Kubernetes vs Docker Swarm\" I compare both Docker and Kubernetes and Kubernetes vs Docker Swarm.\n\n► Subscribe To Me On Youtube: https://bit.ly/2z5rvTV\n\n▬▬▬▬▬▬ T I M E S T A M P S ⏰  ▬▬▬▬▬▬\n0:00 - Intro\n0:38 - Comparison Docker and Kubernetes\n1:40 - Docker and Kubernetes in the software development process\n2:42 - Kubernetes in Detail\n3:21 - Differences of Kubernetes and Docker Swarm\n\nKubernetes and Docker are not competing technologies. In fact, they actually complement one another to get the best out of both. In contrast, Docker Swarm is the comparable technology to Kubernetes.\n\n#kubernetes #devops #techworldwithnana #docker #dockertutorials\n\n▬▬▬▬▬▬ Want to learn more? 🚀  ▬▬▬▬▬▬ \nFull Kubernetes and Docker tutorial              ►  https://bit.ly/2YGeRp9\nWhat is Kubernetes?                                        ►  https://youtu.be/VnvRFRk_51k\nComplete Jenkins Pipeline Tutorial               ►  https://youtu.be/7KCS70sCoK0\n\n\n▬▬▬▬▬▬ Maybe interesting for you 😎   ▬▬▬▬▬▬ \nKubernetes 101 - cheatsheet for your work (ebook bundle with visuals)      ► https://bit.ly/3mPIaiU\n\n\n▬▬▬▬▬▬ Connect with me 👋   ▬▬▬▬▬▬ \nJoin private Facebook group      ►  https://bit.ly/32UVSZP\nDon\"t forget to subscribe             ►  https://bit.ly/3mO4jxT\nDEV                                                 ►  https://bit.ly/3h2fqiO\nINSTAGRAM                                  ►  https://bit.ly/2F3LXYJ\nTWITTER                                        ►  https://bit.ly/3i54PUB\nLINKEDIN                                       ►  https://bit.ly/3hWOLVT"
+                },
+                "defaultAudioLanguage": "en"
+            }
+        }
+    ],
+    [
+        {
+            "kind": "youtube#video",
+            "etag": "KYJakK9jQ6R_NQyfoPJHyvmbCGY",
+            "id": "094y1Z2wpJg",
+            "snippet": {
+                "publishedAt": "2021-07-30T14:16:19Z",
+                "channelId": "UCHnyfMqiRRG1u-2MsSQLbXA",
+                "title": "The Simplest Math Problem No One Can Solve",
+                "description": "The Collatz Conjecture is the simplest math problem no one can solve — it is easy enough for almost anyone to understand but notoriously difficult to solve. This video is sponsored by Brilliant. The first 200 people to sign up via https://brilliant.org/veritasium get 20% off a yearly subscription.\n\nSpecial thanks to Prof. Alex Kontorovich for introducing us to this topic, filming the interview, and consulting on the script and earlier drafts of this video.\n\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nReferences:\nLagarias, J. C. (2006). The 3x+ 1 problem: An annotated bibliography, II (2000-2009). arXiv preprint math/0608208. — https://ve42.co/Lagarias2006\n\nLagarias, J. C. (2003). The 3x+ 1 problem: An annotated bibliography (1963–1999). The ultimate challenge: the 3x, 1, 267-341. — https://ve42.co/Lagarias2003\n\nTao, T (2020). The Notorious Collatz Conjecture — https://ve42.co/Tao2020\n\nA. Kontorovich and Y. Sinai, Structure Theorem for (d,g,h)-Maps, Bulletin of the Brazilian Mathematical Society, New Series 33(2), 2002, pp. 213-224.\n\nA. Kontorovich and S. Miller Benford\"s Law, values of L-functions and the 3x+1 Problem, Acta Arithmetica 120 (2005), 269-297.\n\nA. Kontorovich and J. Lagarias Stochastic Models for the 3x + 1 and 5x + 1 Problems, in \"The Ultimate Challenge: The 3x+1 Problem,\" AMS 2010.\n\nTao, T. (2019). Almost all orbits of the Collatz map attain almost bounded values. arXiv preprint arXiv:1909.03562. — https://ve42.co/Tao2019\n\nConway, J. H. (1987). Fractran: A simple universal programming language for arithmetic. In Open problems in Communication and Computation (pp. 4-26). Springer, New York, NY. — https://ve42.co/Conway1987\n\n ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nSpecial thanks to Patreon supporters: Alvaro Naranjo, Burt Humburg, Blake Byers, Dumky, Mike Tung, Evgeny Skvortsov, Meekay, Ismail Öncü Usta, Paul Peijzel, Crated Comments, Anna, Mac Malkawi, Michael Schneider, Oleksii Leonov, Jim Osmun, Tyson McDowell, Ludovic Robillard, Jim buckmaster, fanime96, Juan Benet, Ruslan Khroma, Robert Blum, Richard Sundvall, Lee Redden, Vincent, Marinus Kuivenhoven, Alfred Wallace, Arjun Chakroborty, Joar Wandborg, Clayton Greenwell, Pindex, Michael Krugman, Cy \"kkm\" K\"Nelson, Sam Lutfi, Ron Neal \n\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nWritten by Derek Muller, Alex Kontorovich and Petr Lebedev\nAnimation by Iván Tello, Jonny Hyman, Jesús Enrique Rascón and Mike Radjabov\nFilmed by Derek Muller and Emily Zhang\nEdited by Derek Muller \nSFX by Shaun Clifford\nAdditional video supplied by Getty Images \nProduced by Derek Muller, Petr Lebedev and Emily Zhang\n\n3d Coral by Vasilis Triantafyllou and Niklas Rosenstein — https://ve42.co/3DCoral\nCoral visualisation by Algoritmarte — https://ve42.co/Coral",
+                "thumbnails": {
+                    "default": {
+                        "url": "https://i.ytimg.com/vi/094y1Z2wpJg/default.jpg",
+                        "width": 120,
+                        "height": 90
+                    },
+                    "medium": {
+                        "url": "https://i.ytimg.com/vi/094y1Z2wpJg/mqdefault.jpg",
+                        "width": 320,
+                        "height": 180
+                    },
+                    "high": {
+                        "url": "https://i.ytimg.com/vi/094y1Z2wpJg/hqdefault.jpg",
+                        "width": 480,
+                        "height": 360
+                    },
+                    "standard": {
+                        "url": "https://i.ytimg.com/vi/094y1Z2wpJg/sddefault.jpg",
+                        "width": 640,
+                        "height": 480
+                    },
+                    "maxres": {
+                        "url": "https://i.ytimg.com/vi/094y1Z2wpJg/maxresdefault.jpg",
+                        "width": 1280,
+                        "height": 720
+                    }
+                },
+                "channelTitle": "Veritasium",
+                "tags": [
+                    "veritasium",
+                    "science",
+                    "physics"
+                ],
+                "categoryId": "27",
+                "liveBroadcastContent": "none",
+                "defaultLanguage": "en",
+                "localized": {
+                    "title": "The Simplest Math Problem No One Can Solve",
+                    "description": "The Collatz Conjecture is the simplest math problem no one can solve — it is easy enough for almost anyone to understand but notoriously difficult to solve. This video is sponsored by Brilliant. The first 200 people to sign up via https://brilliant.org/veritasium get 20% off a yearly subscription.\n\nSpecial thanks to Prof. Alex Kontorovich for introducing us to this topic, filming the interview, and consulting on the script and earlier drafts of this video.\n\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nReferences:\nLagarias, J. C. (2006). The 3x+ 1 problem: An annotated bibliography, II (2000-2009). arXiv preprint math/0608208. — https://ve42.co/Lagarias2006\n\nLagarias, J. C. (2003). The 3x+ 1 problem: An annotated bibliography (1963–1999). The ultimate challenge: the 3x, 1, 267-341. — https://ve42.co/Lagarias2003\n\nTao, T (2020). The Notorious Collatz Conjecture — https://ve42.co/Tao2020\n\nA. Kontorovich and Y. Sinai, Structure Theorem for (d,g,h)-Maps, Bulletin of the Brazilian Mathematical Society, New Series 33(2), 2002, pp. 213-224.\n\nA. Kontorovich and S. Miller Benford\"s Law, values of L-functions and the 3x+1 Problem, Acta Arithmetica 120 (2005), 269-297.\n\nA. Kontorovich and J. Lagarias Stochastic Models for the 3x + 1 and 5x + 1 Problems, in \"The Ultimate Challenge: The 3x+1 Problem,\" AMS 2010.\n\nTao, T. (2019). Almost all orbits of the Collatz map attain almost bounded values. arXiv preprint arXiv:1909.03562. — https://ve42.co/Tao2019\n\nConway, J. H. (1987). Fractran: A simple universal programming language for arithmetic. In Open problems in Communication and Computation (pp. 4-26). Springer, New York, NY. — https://ve42.co/Conway1987\n\n ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nSpecial thanks to Patreon supporters: Alvaro Naranjo, Burt Humburg, Blake Byers, Dumky, Mike Tung, Evgeny Skvortsov, Meekay, Ismail Öncü Usta, Paul Peijzel, Crated Comments, Anna, Mac Malkawi, Michael Schneider, Oleksii Leonov, Jim Osmun, Tyson McDowell, Ludovic Robillard, Jim buckmaster, fanime96, Juan Benet, Ruslan Khroma, Robert Blum, Richard Sundvall, Lee Redden, Vincent, Marinus Kuivenhoven, Alfred Wallace, Arjun Chakroborty, Joar Wandborg, Clayton Greenwell, Pindex, Michael Krugman, Cy \"kkm\" K\"Nelson, Sam Lutfi, Ron Neal \n\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ \nWritten by Derek Muller, Alex Kontorovich and Petr Lebedev\nAnimation by Iván Tello, Jonny Hyman, Jesús Enrique Rascón and Mike Radjabov\nFilmed by Derek Muller and Emily Zhang\nEdited by Derek Muller \nSFX by Shaun Clifford\nAdditional video supplied by Getty Images \nProduced by Derek Muller, Petr Lebedev and Emily Zhang\n\n3d Coral by Vasilis Triantafyllou and Niklas Rosenstein — https://ve42.co/3DCoral\nCoral visualisation by Algoritmarte — https://ve42.co/Coral"
+                },
+                "defaultAudioLanguage": "en"
+            }
+        }
+    ]
+]
