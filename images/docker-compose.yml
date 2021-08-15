@@ -59,7 +59,7 @@ services:
       - ./postgres/data:/var/lib/postgresql/data
       - ./docker-entrypoint-initdb.d/docker-postgresql-multiple-databases.sh:/docker-entrypoint-initdb.d/ocker-postgresql-multiple-databases.sh
     environment:
-        - POSTGRES_MULTIPLE_DATABASES=channeldb,videodb,commentdb
+        - POSTGRES_MULTIPLE_DATABASES=searchdb,channeldb,videodb,commentdb
         - POSTGRES_USER=${POSTGRES_ADMIN}
         - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
 
