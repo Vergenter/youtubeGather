@@ -1,5 +1,5 @@
 *checkpoint*
-neo4j/*/*
+images/*/*
 __pycache__
 .vscode
 .env
