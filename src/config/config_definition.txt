@@ -1,0 +1,46 @@
+search:
+    languages: list[str]
+    games: list[str]
+    limit: int
+
+include:
+    videos: list[str]
+    channels_videos: list[str]
+    channels: list[str]
+    
+videos:
+    update_frequency: int
+    update:
+        [video_id: str]:[update_frequency: int]
+        ...
+
+channel_videos:
+    update_frequency: int
+    update:
+        [channel-id: str]:[update_frequency: int]
+        ...
+
+channels:
+    update_frequency: int
+    update:
+        [channel_id: str]:[update_frequency: int]
+        ...
+
+video_comments:
+    update_frequency: int
+    update:
+        [video_id: str]:[update_frequency: int]
+        ...
+
+comments:
+    update_frequency: int
+    update:
+        [comment_id: str]:[update_frequency: int]
+        ...
+
+replies:
+    update_frequency: int
+    update:
+        [comment_id: str]:[update_frequency: int]
+        ...
+

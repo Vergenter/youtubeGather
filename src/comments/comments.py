@@ -1,5 +1,5 @@
-from comments.comments_config import comments
+from comments.comments_config import CommentsModuleConfig
 
 
-def main(data: comments):
+def main(data: CommentsModuleConfig):
     print(data)
