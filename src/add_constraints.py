@@ -23,6 +23,33 @@ def main():
         ON (g:Game)
         ASSERT g.title IS UNIQUE""")
 
+    conn.query("""
+        CREATE CONSTRAINT category_id_unique IF NOT EXISTS
+        ON (c:Category)
+        ASSERT c.categoryId IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT tag_unique IF NOT EXISTS
+        ON (t:Tag)
+        ASSERT t.tagName IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT topic_unique IF NOT EXISTS
+        ON (t:Topic)
+        ASSERT t.url IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT region_unique IF NOT EXISTS
+        ON (r:Region)
+        ASSERT r.regionCode IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT language_unique IF NOT EXISTS
+        ON (l:Language)
+        ASSERT l.language IS UNIQUE""")
+
+    conn.close()
+
 
 if __name__ == "__main__":
     main()

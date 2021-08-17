@@ -13,7 +13,6 @@ from typing import Any, Callable, TypeVar
 
 
 T = TypeVar("T")
-videos
 
 
 def runer_from_config(config_parser: Callable[[Any], T], main_function: Callable[[T], None]):

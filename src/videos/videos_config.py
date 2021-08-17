@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import Iterable
+from dataclasses import dataclass
+from typing import Sequence
 from utils.types import ChannelId, VideoId
 
 
@@ -11,7 +11,7 @@ class ChannelVideosUpdateConfig:
 
 @dataclass(frozen=True)
 class ChannelVideosConfig:
-    update: 'Iterable[ChannelVideosUpdateConfig]' = ()
+    update: 'Sequence[ChannelVideosUpdateConfig]' = ()
     update_frequency: int = 0
 
 
@@ -23,14 +23,14 @@ class VideosUpdateConfig:
 
 @dataclass(frozen=True)
 class VideosConfig:
-    update: 'Iterable[VideosUpdateConfig]' = ()
+    update: 'Sequence[VideosUpdateConfig]' = ()
     update_frequency: int = 0
 
 
 @dataclass(frozen=True)
 class IncludeConfig:
-    channels_videos: 'Iterable[ChannelId]' = ()
-    videos: 'Iterable[VideoId]' = ()
+    channels_videos: 'Sequence[ChannelId]' = ()
+    videos: 'Sequence[VideoId]' = ()
 
 
 @dataclass(frozen=True)

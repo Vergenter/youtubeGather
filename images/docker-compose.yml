@@ -44,7 +44,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_CREATE_TOPICS: "channel:1:1,video:1:1,replies:1:1"
     volumes: 
-      - ./broker/data:/var/lib/kafka/data
+      - ./broker/data:/var/lib/kafka/data 
 
   postgres:
     image: postgres
