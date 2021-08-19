@@ -9,13 +9,14 @@ YOUTUBE_API_SERVICE_NAME = 'youtube'
 YOUTUBE_API_VERSION = 'v3'
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
 MAX_SINGLE_QUERY_RESULTS = 50
+quota_usage_per_request = 1
 
 
 @dataclass
 class VideosManager:
-    max_singe_query_results = 50
     api: APIConnector
     resource: Any
+    quota_usage: int
 
     @classmethod
     def new(cls):
@@ -27,7 +28,7 @@ class VideosManager:
             cache_discovery=False,
         )
         resource = service.videos()  # type: ignore pylint: disable=E1101
-        return cls(api=api, resource=resource)
+        return cls(api=api, resource=resource, quota_usage=0)
 
     def list(self, videos_id: 'set[VideoId]'):
         items: 'list[dict]' = []
@@ -39,6 +40,7 @@ class VideosManager:
                                      regionCode="US")
         while request is not None:
             response = self.api.execute(request)
+            self.quota_usage += quota_usage_per_request
             items.extend(response["items"])
             request = self.resource.list_next(request, response)
         return items

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from isodate.duration import Duration
 from utils.types import VideoId, ChannelId
@@ -24,8 +24,8 @@ class Video:
     tags: 'list[str]'  # custom user tags
     category_id: str  # single category id
     liveBroadcastContent: bool  # live/none/upcoming -> none<=>false
-    defaultLanguage: str  # language
-    defaultAudioLanguage: str  # language
+    defaultLanguage: Optional[str]  # language
+    defaultAudioLanguage: Optional[str]  # language
     duration: timedelta  # ISO 8601 duration
     is3D: bool  # dimension =="3D"
     ishd: bool  # if definition==hd
@@ -57,20 +57,20 @@ def from_json(json: Any):
         channel_id=json["snippet"]["channelId"],
         title=json["snippet"]["title"],
         description=json["snippet"]["description"],
-        tags=json["snippet"]["tags"],
+        tags=json["snippet"].get("tags", []),
         category_id=json["snippet"]["categoryId"],
         liveBroadcastContent=json["snippet"]["categoryId"] != "none",
-        defaultLanguage=json["snippet"]["defaultLanguage"],
-        defaultAudioLanguage=json["snippet"]["defaultAudioLanguage"],
+        defaultLanguage=json["snippet"].get("defaultLanguage"),
+        defaultAudioLanguage=json["snippet"].get("defaultAudioLanguage"),
         duration=wrapped_parse_timeDelta(json["contentDetails"]["duration"]),
         is3D=json["contentDetails"]["dimension"] == "3d",
         ishd=json["contentDetails"]["definition"] == "hd",
         hasCaption=json["contentDetails"]["caption"],
         licensedContent=json["contentDetails"]["licensedContent"],
         regionRestrictionAllowed=json.get(
-            "regionRestriction") and json["regionRestriction"].get("allowed"),
+            "regionRestriction", {}).get("allowed", []),
         regionRestrictionBlocked=json.get(
-            "regionRestriction") and json["regionRestriction"].get("blocked"),
+            "regionRestriction", {}).get("blocked", []),
         is360degree=json["contentDetails"]["projection"] == "360",
         status=json["status"].get("failureReason") or json["status"].get(
             "rejectionReason") or json["status"]["uploadStatus"],
@@ -83,6 +83,7 @@ def from_json(json: Any):
         likeCount=json["statistics"].get("likeCount"),
         dislikeCount=json["statistics"].get("dislikeCount"),
         commentCount=json["statistics"].get("commentCount"),
-        topicCategories=json["topicDetails"]["topicCategories"],
-        localizations=list(json["localizations"])
+        topicCategories=json.get("topicDetails", {}).get(
+            "topicCategories", []),
+        localizations=list(json.get("localizations", []))
     )
