@@ -4,7 +4,7 @@
 CREATE SCHEMA searches
 	CREATE TABLE videos (
 		video_id char(11) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
 	);
 \connect
@@ -21,7 +21,7 @@ CREATE DATABASE channeldb
 CREATE SCHEMA channels
 	CREATE TABLE channels (
 		channel_id char(22) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT channel_id_update PRIMARY KEY(channel_id,update)
 	);
 
@@ -38,12 +38,12 @@ CREATE DATABASE videodb
 CREATE SCHEMA videos
 	CREATE TABLE videos (
 		video_id char(11) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
 	)
 	CREATE TABLE channels (
 		channel_id char(22) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT channel_id_update PRIMARY KEY(channel_id,update)
 	);
 
@@ -60,12 +60,12 @@ CREATE DATABASE commentdb
 CREATE SCHEMA comments;
 	CREATE TABLE comments (
 		comment_id varchar(49) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT comment_id_update PRIMARY KEY(comment_id,update)
 	)
 	CREATE TABLE videos (
 		video_id char(11) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
 	);
 
@@ -82,6 +82,6 @@ CREATE DATABASE replydb
 CREATE SCHEMA replies;
 	CREATE TABLE replies (
 		comment_id varchar(49) NOT NULL,
-		update date NOT NULL,
+		update TIMESTAMP NOT NULL,
 		CONSTRAINT comment_id_update PRIMARY KEY(comment_id,update)
 	);

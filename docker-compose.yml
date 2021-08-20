@@ -1,0 +1,9 @@
+version: "3.4"
+
+services:
+  channels:
+    build:
+      context: channels
+  comments:
+    build:
+      context: comments

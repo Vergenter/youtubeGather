@@ -1,7 +1,9 @@
-from channels.channels_config import ChannelsModuleConfig
+from channels_config import ChannelsConfig, from_yaml
+import yaml
 
 
-def main(data: ChannelsModuleConfig):
+def main(data: ChannelsConfig):
+
     # 1
     # fetch from main database channels
     # filter by own database
@@ -28,4 +30,10 @@ def main(data: ChannelsModuleConfig):
     # send through kafka channel_ids
     # add to graph db
 
-    print(data)
+    print(2)
+
+
+if __name__ == "__main__":
+    with open("config.yaml", 'r', encoding='utf-8') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        main(from_yaml(config))
