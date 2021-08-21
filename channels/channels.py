@@ -30,7 +30,7 @@ def main(data: ChannelsConfig):
     # send through kafka channel_ids
     # add to graph db
 
-    print(2)
+    print(data)
 
 
 if __name__ == "__main__":

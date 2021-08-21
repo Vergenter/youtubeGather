@@ -1,23 +1,23 @@
-# For more information, please refer to https://aka.ms/vscode-docker-python
-FROM python:3.8-slim-buster
+FROM python as base
 
-# Keeps Python from generating .pyc files in the container
-ENV PYTHONDONTWRITEBYTECODE=1
+RUN mkdir /channels/
+WORKDIR /channels
 
-# Turns off buffering for easier container logging
-ENV PYTHONUNBUFFERED=1
-
-# Install pip requirements
-COPY requirements.txt .
+COPY requirements.txt /channels/requirements.txt
+RUN python -m pip install --upgrade pip
 RUN python -m pip install -r requirements.txt
 
-WORKDIR /app
-COPY . /app
+### DEBUG ###
+FROM base as debug
 
-# Creates a non-root user with an explicit UID and adds permission to access the /app folder
-# For more info, please refer to https://aka.ms/vscode-docker-python-configure-containers
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
-USER appuser
+RUN python -m pip install debugpy
 
-# During debugging, this entry point will be overridden. For more information, please refer to https://aka.ms/vscode-docker-python-debug
-CMD ["python", "channels/channels.py"]
+COPY . /channels/
+
+ENTRYPOINT [ "python", "-m", "debugpy","--wait-for-client", "--listen", "0.0.0.0:5678","channels.py" ]
+
+### PRODUCTION ###
+
+FROM base as production
+COPY . /channels/
+ENTRYPOINT [ "python", "channels.py" ]
