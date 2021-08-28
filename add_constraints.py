@@ -1,4 +1,4 @@
-from db.connection import Neo4jConnection
+from utils.connection import Neo4jConnection
 
 
 def main():
@@ -47,6 +47,11 @@ def main():
         CREATE CONSTRAINT language_unique IF NOT EXISTS
         ON (l:Language)
         ASSERT l.language IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT country_unique IF NOT EXISTS
+        ON (c:Country)
+        ASSERT c.country IS UNIQUE""")
 
     conn.close()
 

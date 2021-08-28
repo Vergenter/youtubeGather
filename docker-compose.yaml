@@ -1,41 +1,141 @@
 version: "3.9"
 services:
+  include:
+    build:
+      context: include
+      target: production
+    # ports:
+    #   - 5678:5678 # debugger port only if target: debug
+    depends_on:
+      kafka:
+        condition: service_healthy
+
   channels:
     build:
       context: channels
       target: debug
     ports:
-      - 5678:5678
+      - 5678:5678 # debugger port only if target: debug
+    environment:
+      - POSTGRES_ADMIN=${POSTGRES_ADMIN}
+      - POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+      - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
+      - NEO4J_BOLT_URL=bolt://neo4j:7687
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./utils:/channels/utils
+      - ./rejected:/channels/rejected
+
   comments:
     build:
       context: comments
-      target: debug
-    ports:
-      - 5678:5678
-  # zookeeper:
-  #   image: confluentinc/cp-zookeeper:latest
-  #   environment:
-  #     ZOOKEEPER_CLIENT_PORT: 2181
-  #     ZOOKEEPER_TICK_TIME: 2000
-  #   ports:
-  #     - 22181:2181
-  #   volumes:
-  #     - ~/images/zoo/data:/var/lib/zookeeper/data
-  #     - ~/images/zoo/log:/var/lib/zookeeper/log
+      target: production
+    environment:
+      - POSTGRES_ADMIN=${POSTGRES_ADMIN}
+      - POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+      - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
+    # ports:
+    #   - 5678:5678 # debugger port only if target: debug
+    volumes:
+      - ./rejected:/comments/rejected
 
-  # kafka:
-  #   image: confluentinc/cp-kafka:latest
-  #   depends_on:
-  #     - zookeeper
-  #   ports:
-  #     - 29092:29092
-  #   environment:
-  #     KAFKA_BROKER_ID: 1
-  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-  #     KAFKA_CREATE_TOPICS: "new_channel:1:1,new_video:1:1,new_replies:1:1"
-  #   volumes:
-  #     - ~/images/broker/data:/var/lib/kafka/data
+  zookeeper:
+    restart: unless-stopped
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+    volumes:
+      - ~/images/zoo/data:/var/lib/zookeeper/data
+      - ~/images/zoo/log:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "unset",
+          "JMX_PORT",
+          ";",
+          "kafka-topics.sh",
+          "--zookeeper",
+          "zookeeper:2181",
+          "--list",
+        ]
+      interval: 1s
+      timeout: 3s
+      start_period: 15s
+      retries: 60
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    command: sh -c "((kafka-topics --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 3 --topic new_channels)&) && ((kafka-topics --create --zookeeper zookeeper:2181 --replication-factor 1 --partitions 3 --topic updates)&) && /etc/confluent/docker/run "
+    volumes:
+      - ~/images/broker/data:/var/lib/kafka/data
+
+  postgres:
+    image: postgres
+    restart: always
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ~/images//postgres/data:/var/lib/postgresql/data
+      - ./docker_postgres_init.sql:/docker-entrypoint-initdb.d/docker_postgres_init.sql
+    environment:
+      - POSTGRES_DB=channeldb
+      - POSTGRES_USER=${POSTGRES_ADMIN}
+      - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+
+  pgadmin:
+    container_name: pgadmin4_container
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    volumes:
+      - ~/images//pgadmin:/var/lib/pgadmin
+    depends_on:
+      - postgres
+  neo4j:
+    image: neo4j:4.3
+    restart: unless-stopped
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - ~/images/neo4j/conf:/conf
+      - ~/images/neo4j/data:/data
+      - ~/images/neo4j/import:/import
+      - ~/images/neo4j/logs:/logs
+      - ~/images/neo4j/plugins:/plugins
+    environment:
+      # Raise memory limits
+      - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
+      - NEO4J_dbms_memory_pagecache_size=3G
+      - NEO4J_dbms.memory.heap.initial_size=2G
+      - NEO4J_dbms_memory_heap_max__size=2G
