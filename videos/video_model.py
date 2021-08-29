@@ -46,7 +46,7 @@ class Video:
     commentCount: int
     topicCategories: 'list[str]'  # urls
     localizations: 'list[str]'  # languages
-    update: date = date.today()
+    update: datetime = datetime.now()
 
 
 def from_json(json: Any):
