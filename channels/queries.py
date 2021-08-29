@@ -1,5 +1,5 @@
 from datetime import datetime
-from utils.types import ChannelId
+from utils.types import ChannelId, VideoId
 from channel_model import Channel
 
 

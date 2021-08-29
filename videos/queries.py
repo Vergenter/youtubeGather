@@ -1,4 +1,22 @@
-query_to_update = """select video_Id from videos.videos where video_Id not in (select video_Id from videos.videos where update> %s - %s)"""
+
+from datetime import datetime
+from utils.types import VideoId
+from video_model import Video
+
+
+def video_to_update(video: Video):
+    return (video.video_id, video.update)
+
+
+def to_update(update: datetime):
+    def channel_id_to_update(video_id: VideoId):
+        return (video_id, update)
+    return channel_id_to_update
+
+
+videos_update_query = 'select distinct video_id from videos.videos where video_id not in (select video_id from videos.videos where update > $1;'
+new_videos_query = 'SELECT id FROM unnest($1::text[]) as V(id) EXCEPT SELECT video_id FROM videos.videos;'
+update_insert_query = 'INSERT INTO videos.videos VALUES ($1,$2)'
 
 static_video_query = '''
 UNWIND $rows AS row
@@ -8,8 +26,6 @@ with video,row
 SET video.publishedAt= row.publishedAt,
     video.description= row.description,
     video.liveBroadcastContent= row.liveBroadcastContent,
-    video.defaultLanguage= row.defaultLanguage,
-    video.defaultAudioLanguage= row.defaultAudioLanguage,
     video.duration= row.duration,
     video.is3D= row.is3D,
     video.ishd= row.ishd,
@@ -69,7 +85,9 @@ with video,row
 
 dynamic_video_query = '''
 UNWIND $rows AS row
+with row
 MERGE (video:Video{videoId: row.video_id})
+with row
 CREATE (videoStatistics:VideoStatistics{
     title: row.title,
     hasCaption: row.hasCaption,
@@ -82,5 +100,6 @@ CREATE (videoStatistics:VideoStatistics{
     dislikeCount: row.dislikeCount,
     commentCount: row.commentCount
     })
+with videoStatistics,row,video
 CREATE (videoStatistics)-[:OF{date: row.today}]->(video)
 '''

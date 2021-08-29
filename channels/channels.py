@@ -27,10 +27,10 @@ log = logging.getLogger(__name__)
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
 YOUTUBE_CHANNELS_MAX_CHUNK = 50
-dbname = "channeldb"
-user = os.environ['POSTGRES_ADMIN']
-password = os.environ['POSTGRES_ADMIN_PASSWORD']
-host = "postgres"
+dbname = os.environ['POSTGRES_DBNAME']
+host = os.environ['POSTGRES_HOST']
+user = os.environ['POSTGRES_USER']
+password = os.environ['POSTGRES_USER_PASSWORD']
 
 
 async def kafka_produce(consumer: AIOKafkaConsumer, queue: asyncio.Queue):
@@ -88,7 +88,7 @@ async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
     async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
         youtube_api = await aiogoogle.discover('youtube', 'v3')
         req = youtube_api.channels.list(
-            part="brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails", id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK)
+            part="brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails", id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US", regionCode="US")  # type: ignore
         parsed: list[Channel] = []
         result = {"items": []}
         while True:
@@ -176,7 +176,7 @@ async def main(data: ChannelsConfig):
     updateConsumer = AIOKafkaConsumer(
         'updates',
         bootstrap_servers='kafka:9092',
-        enable_auto_commit=True,      # Will disable autocommit
+        enable_auto_commit=True,
         auto_offset_reset="latest",
     )
     postgres_pool = asyncpg.create_pool(

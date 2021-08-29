@@ -1,104 +1,221 @@
 from dataclasses import asdict
-import datetime
 import json
-from db.connection import Neo4jConnection
-from videos.video_model import Video, from_json
-from videos.videos_api import VideosManager, MAX_SINGLE_QUERY_RESULTS
-from utils.types import VideoId
-from videos.videos_config import VideosModuleConfig
-import psycopg2
-from psycopg2.extras import execute_values
+from video_model import from_json
+from videos_config import from_yaml
+from videos_config import VideosConfig
+from video_model import Video
+
+from aiogoogle.excs import HTTPError
+from aiokafka.producer.producer import AIOKafkaProducer
+from utils.connection import Neo4jConnection
+from utils.sync_to_async import run_in_executor
+from datetime import datetime, timedelta
+import queries
+from aiogoogle.client import Aiogoogle
+from utils.chunk_gen import get_new_chunk_gen
+from kafka.structs import TopicPartition
+import yaml
+from aiokafka import AIOKafkaConsumer
+import asyncio
+from utils.types import VideoId, VideoId
+import asyncpg
 import os
-from utils.slice import chunked
-from videos.queries import static_video_query, dynamic_video_query, query_to_update
+from operator import attrgetter
 
-dbname = "videodb"
-user = os.environ['POSTGRES_ADMIN']
+
+import logging
+logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+log = logging.getLogger(__name__)
+
+TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
+DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
+YOUTUBE_VIDEOS_MAX_CHUNK = 50
+dbname = os.environ['POSTGRES_DBNAME']
+user = os.environ['POSTGRES_USER']
 password = os.environ['POSTGRES_ADMIN_PASSWORD']
-host = "localhost"
+host = os.environ['POSTGRES_HOST']
 
 
-def update_date(new_date: datetime.date):
-    def map_update_model(video_id: VideoId):
-        return video_id, new_date
-    return map_update_model
+async def kafka_produce(consumer: AIOKafkaConsumer, queue: asyncio.Queue):
+    # Consume messages
+    async for msg in consumer:
+        msg.value = msg.value.decode("utf-8")
+        await queue.put(msg)
 
 
-def main(data: VideosModuleConfig):
+async def kafka_commit(consumer: AIOKafkaConsumer, msg):
+    tp = TopicPartition(msg.topic, msg.partition)
+    log.info("kafka commit new offset %s", msg.offset+1)
+    await consumer.commit({tp: msg.offset+1})
 
-    today = datetime.date.today()
-    if len(data.videosConfig.update) + len(data.channelVideosConfig.update) > 0:
-        raise NotImplementedError("That is not implemented!")
 
-    new_video_ids: 'set[VideoId]' = set()
-    if len(data.includeConfig.videos) > 0:
-        with psycopg2.connect(f"dbname={dbname} user={user} password={password} host={host}") as conn:
-            with conn.cursor() as curs:
-                execute_values(curs, 'SELECT id FROM (VALUES %s) V(id) EXCEPT SELECT distinct video_Id FROM videos.videos;', list(
-                    map(lambda x: (x,), data.includeConfig.videos)))
-                new_video_ids = set(
-                    map(lambda x: VideoId(x[0]), curs.fetchall()))
-    outdated: 'set[VideoId]' = set()
-    if data.videosConfig.update_frequency > 0:
-        with psycopg2.connect(f"dbname={dbname} user={user} password={password} host={host}") as conn:
-            with conn.cursor() as curs:
-                curs.execute(query_to_update,
-                             (today, data.videosConfig.update_frequency))
-                outdated = set(map(lambda x: VideoId(x[0]), curs.fetchall()))
-    merged = new_video_ids | outdated
-    results = []
-    vm = VideosManager.new()
-    for videos_ids_chunk in chunked(MAX_SINGLE_QUERY_RESULTS, merged):
-        results += vm.list(set(videos_ids_chunk))
-    print(vm.quota_usage)
-    parsed: 'list[Video]' = []
-    errous = []
-    for result in results:
-        try:
-            parsed.append(from_json(result))
-        except KeyError:
-            errous.append(result)
-    if len(errous) > 0:
-        with open('errous.json', 'w+') as f:
-            json.dump(errous, f)
+async def kafka_commit_from_messages(consumer, values, messages):
+    try:
+        first_new_index = next(index for index, x in enumerate(
+            messages) if x.value in values)
+        if first_new_index > 0:
+            await kafka_commit(consumer, messages[first_new_index-1])
+        return False
+    except StopIteration:
+        await kafka_commit(consumer, messages[-1])
+        return True
 
-    newvideos = list(filter(lambda x: x.video_id in new_video_ids, parsed))
-    # 1) push static data
-    neo4j = Neo4jConnection()
-    neo4j.bulk_insert_data(static_video_query, list(map(asdict, newvideos)))
-    # 2) push dynamic data to graph database
-    neo4j.bulk_insert_data(dynamic_video_query, list(map(asdict, parsed)))
+
+async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue: asyncio.Queue, outQueue: asyncio.Queue, new_videos: 'set[VideoId]'):
+    kafka_commit = True
+    async for messages in get_new_chunk_gen(inQueue, 5, 1000):
+        if len(messages) > 0:
+            async with pool.acquire() as con:
+                # need to parse args to ids
+                values = {VideoId(i["id"]) for i in await con.fetch(queries.new_videos_query, list(map(VideoId, map(attrgetter("value"), messages))))}
+                if kafka_commit:
+                    kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
+                for value in values:
+                    if value not in new_videos:
+                        new_videos.add(value)
+                        await outQueue.put(value)
+
+
+async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
+    if frequency > 0:
+        async for updates in get_new_chunk_gen(inQueue, 5):
+            if len(updates) > 0:
+                async with pool.acquire() as con:
+                    values = await con.fetch(queries.videos_update_query, datetime.today() - timedelta(days=frequency))
+                    for value in values:
+                        await outQueue.put(value)
+
+
+async def fetch_videos_from_yt(videos_ids: 'list[VideoId]'):
+    async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
+        youtube_api = await aiogoogle.discover('youtube', 'v3')
+        req = youtube_api.videos.list(
+            part="contentDetails,id,liveStreamingDetails,localizations,recordingDetails,snippet,statistics,status,topicDetails", id=",".join(videos_ids), maxResults=YOUTUBE_VIDEOS_MAX_CHUNK, hl="en_US", regionCode="US")  # type: ignore
+        parsed: list[Video] = []
+        result = {"items": []}
+        while True:
+            try:
+                result = await aiogoogle.as_api_key(req)
+                break
+            except HTTPError as err:
+                now = datetime.now()
+                same_day_update = datetime(
+                    year=now.year, month=now.month, day=now.day, hour=10)
+                next_day_update = datetime(
+                    year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
+                next_update = same_day_update if now.hour < 10 else next_day_update
+                delta = (datetime.now()-next_update)
+                log.debug(
+                    "youtube fetch failed %s and is waiting for %s", err.res, delta)
+                asyncio.sleep(delta.total_seconds())
+
+        rejected = []
+        for item in result["items"]:
+            try:
+                parsed.append(from_json(item))
+            except KeyError:
+                rejected.append(item)
+        if len(rejected) > 0:
+            with open(f'./rejected/videos-{datetime.now()}.json', 'w') as f:
+                json.dump(rejected, f)
+        return parsed
+
+
+@run_in_executor
+def neo4j_blocking_query(neo4j: Neo4jConnection, query: str, videos: 'list[Video]'):
+    neo4j.bulk_insert_data(query, list(map(asdict, videos)))
+
+
+@run_in_executor
+def get_neo4j():
+    return Neo4jConnection()
+
+
+@run_in_executor
+def close_neo4j(neo4j: Neo4jConnection):
     neo4j.close()
 
-    with psycopg2.connect(f"dbname={dbname} user={user} password={password} host={host}") as conn:
-        with conn.cursor() as curs:
-            execute_values(curs, 'INSERT INTO "videos"."videos" VALUES %s', list(
-                map(update_date(today), map(lambda x: x.video_id, parsed))))
 
-    # send newvideos channels throug kafka
+async def push_to_neo4j(videos: 'list[Video]', new_videos: 'set[VideoId]'):
+    if len(videos) == 0:
+        return
+    videos_to_create = [
+        video for video in videos if video.video_id in new_videos]
+    neo4j = await get_neo4j()  # type: ignore
+    if len(videos_to_create) > 0:
+        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_video_query, videos_to_create),  # type: ignore
+                             neo4j_blocking_query(neo4j, queries.dynamic_video_query, videos_to_create))
+    else:
+        await neo4j_blocking_query(
+            neo4j, queries.dynamic_video_query, videos_to_create)  # type: ignore
 
-    # channel ids for channels videos baching -> channel videos ids
-    # check if input channels should be updated -> new? channel ids
-    # read channels videos data from database to update videos -> channel ids
+    await close_neo4j(neo4j)  # type: ignore
 
-    # video ids for update batching -> video state
-    # read videos data from database to update -> videos ids
-    # videos ids for need to be updated batching -> video ids
-    # input new? videos ids
-    # channel new? videos ids
 
-    # video state -> add new videos update date to own database
+async def insert_update(pool: asyncpg.Pool, videos: 'list[Video]', potentialy_wrong_videos_ids: 'list[VideoId]'):
+    if len(videos) == 0 and len(potentialy_wrong_videos_ids) == 0:
+        return
+    videos_to_update = list(map(queries.video_to_update, videos))
+    if len(videos) != len(potentialy_wrong_videos_ids):
+        error_update_time = datetime.now() + TIMEDELTA_WRONG_DATA_UPDATE
+        videos_to_update.extend(map(queries.to_update(error_update_time), {
+            i.video_id for i in videos}.symmetric_difference(potentialy_wrong_videos_ids)))
+        log.info("number of errous video_id %d", len(
+            potentialy_wrong_videos_ids)-len(videos))
+    async with pool.acquire() as con:
+        await con.executemany(queries.update_insert_query, videos_to_update)
+        log.info("inserted to postgres %d updated", len(videos))
 
-    # new? videos ids to -> new videos ids
-    # input new? videos ids
-    # channel new? videos ids
 
-    # new videos ids send through kafka
+async def main(data: VideosConfig):
+    videosConsumer = AIOKafkaConsumer(
+        'new_videos',
+        bootstrap_servers='kafka:9092',
+        enable_auto_commit=False,      # Will disable autocommit
+        auto_offset_reset="earliest",  # If committed offset not found, start from beginning
+        group_id="videoModule"
+    )
+    updateConsumer = AIOKafkaConsumer(
+        'updates',
+        bootstrap_servers='kafka:9092',
+        enable_auto_commit=True,
+        auto_offset_reset="latest",
+    )
+    producer = AIOKafkaProducer(bootstrap_servers='kafka:9092')
+    postgres_pool = asyncpg.create_pool(
+        user=user, password=password, database=dbname, host=host, min_size=2)
+    _, _, pool, _ = await asyncio.gather(videosConsumer.start(), updateConsumer.start(), postgres_pool, producer.start())
+    if not pool:
+        raise NotImplementedError("no connctions")
+    try:
+        input_videos = asyncio.Queue()
+        update_videos = asyncio.Queue()
+        processing_videos = asyncio.Queue()
+        new_videos: 'set[VideoId]' = set()
+        asyncio.create_task(kafka_produce(videosConsumer, input_videos))
+        asyncio.create_task(kafka_produce(updateConsumer, update_videos))
+        asyncio.create_task(process_filter(videosConsumer,
+                                           pool, input_videos, processing_videos, new_videos))
+        asyncio.create_task(process_update(
+            pool, data.update_frequency, update_videos, processing_videos))
+        # long waiting chunk for youtube
+        # add all items to set
+        async for videos_ids in get_new_chunk_gen(processing_videos, 30, YOUTUBE_VIDEOS_MAX_CHUNK):
+            # timeout even for one day
+            videos = await fetch_videos_from_yt(videos_ids)
+            await push_to_neo4j(videos, new_videos)
+            await insert_update(pool, videos, videos_ids)
+            new_videos.difference_update(videos_ids)
+            for video in videos:
+                msg = str.encode(video.channel_id)
+                await producer.send_and_wait("new_channels", value=msg, key=msg)
 
-    # new videos ids + video state => add to graph database new static video data
-    # !!! possible simplify connecting new and old
+    finally:
+        await asyncio.gather(videosConsumer.stop(), updateConsumer.stop(), pool.close(), producer.stop())
 
-    # video state => add to graph database new dynamic video data
 
-    # send through kafka new channel ids
-    # new videos ids query to db -> new channels ids
+if __name__ == "__main__":
+    log.info("service started")
+    with open("config.yaml", 'r', encoding='utf-8') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        asyncio.run(main(from_yaml(config)))
