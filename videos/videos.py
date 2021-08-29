@@ -17,7 +17,7 @@ from kafka.structs import TopicPartition
 import yaml
 from aiokafka import AIOKafkaConsumer
 import asyncio
-from utils.types import VideoId, VideoId
+from utils.types import VideoId
 import asyncpg
 import os
 from operator import attrgetter
@@ -32,7 +32,7 @@ DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
 YOUTUBE_VIDEOS_MAX_CHUNK = 50
 dbname = os.environ['POSTGRES_DBNAME']
 user = os.environ['POSTGRES_USER']
-password = os.environ['POSTGRES_ADMIN_PASSWORD']
+password = os.environ['POSTGRES_PASSWORD']
 host = os.environ['POSTGRES_HOST']
 
 
@@ -81,7 +81,7 @@ async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Qu
         async for updates in get_new_chunk_gen(inQueue, 5):
             if len(updates) > 0:
                 async with pool.acquire() as con:
-                    values = await con.fetch(queries.videos_update_query, datetime.today() - timedelta(days=frequency))
+                    values = await con.fetch(queries.videos_update_query, datetime.now() - timedelta(days=frequency))
                     for value in values:
                         await outQueue.put(value)
 
