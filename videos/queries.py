@@ -101,5 +101,5 @@ CREATE (videoStatistics:VideoStatistics{
     commentCount: row.commentCount
     })
 with videoStatistics,row,video
-CREATE (videoStatistics)-[:OF{date: row.today}]->(video)
+CREATE (videoStatistics)-[:OF{at: row.update}]->(video)
 '''
