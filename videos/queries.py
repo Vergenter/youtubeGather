@@ -87,7 +87,7 @@ dynamic_video_query = '''
 UNWIND $rows AS row
 with row
 MERGE (video:Video{videoId: row.video_id})
-with row
+with row, video
 CREATE (videoStatistics:VideoStatistics{
     title: row.title,
     hasCaption: row.hasCaption,
