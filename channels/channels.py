@@ -28,9 +28,9 @@ TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
 YOUTUBE_CHANNELS_MAX_CHUNK = 50
 dbname = os.environ['POSTGRES_DBNAME']
-host = os.environ['POSTGRES_HOST']
 user = os.environ['POSTGRES_USER']
-password = os.environ['POSTGRES_USER_PASSWORD']
+password = os.environ['POSTGRES_PASSWORD']
+host = os.environ['POSTGRES_HOST']
 
 
 async def kafka_produce(consumer: AIOKafkaConsumer, queue: asyncio.Queue):
@@ -79,7 +79,7 @@ async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Qu
         async for updates in get_new_chunk_gen(inQueue, 5):
             if len(updates) > 0:
                 async with pool.acquire() as con:
-                    values = await con.fetch(queries.channel_update_query, datetime.today() - timedelta(days=frequency))
+                    values = await con.fetch(queries.channel_update_query, datetime.now() - timedelta(days=frequency))
                     for value in values:
                         await outQueue.put(value)
 
@@ -88,7 +88,7 @@ async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
     async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
         youtube_api = await aiogoogle.discover('youtube', 'v3')
         req = youtube_api.channels.list(
-            part="brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails", id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US", regionCode="US")  # type: ignore
+            part="brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails", id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US")  # type: ignore
         parsed: list[Channel] = []
         result = {"items": []}
         while True:
