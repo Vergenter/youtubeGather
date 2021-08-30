@@ -2,7 +2,7 @@
 
 \connect channeldb;
 CREATE SCHEMA channels
-	CREATE TABLE channels (
+	CREATE TABLE channels.channels (
 		channel_id text NOT NULL,
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT channel_id_update PRIMARY KEY(channel_id,update)
@@ -19,7 +19,7 @@ CREATE DATABASE videodb
 
 \connect videodb;
 CREATE SCHEMA videos
-	CREATE TABLE videos (
+	CREATE TABLE videos.videos (
 		video_id text NOT NULL,
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
@@ -36,7 +36,7 @@ CREATE DATABASE commentdb
 
 \connect commentdb;
 CREATE SCHEMA comments;
-	CREATE TABLE videos_comments (
+	CREATE TABLE comments.videos_comments (
 		video_id text NOT NULL,
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_comments_update PRIMARY KEY(video_id,update)
