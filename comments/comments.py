@@ -68,6 +68,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
                 values = {VideoId(i["id"]) for i in await con.fetch(queries.new_videos_query, list(map(VideoId, map(attrgetter("value"), messages))))}
                 if kafka_commit:
                     kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
+                log.info("From kafka got %d new videoId", len(values))
                 for value in values:
                     if value not in new_videos:
                         new_videos.add(value)
@@ -87,6 +88,7 @@ async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Qu
 async def youtube_fetch_comments(video_queue: asyncio.Queue[VideoId]):
     while True:
         video_id = await video_queue.get()
+        log.info("fetching data from youtube")
         async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
             youtube_api = await aiogoogle.discover('youtube', 'v3')
             req = youtube_api.commentThreads.list(
@@ -152,8 +154,8 @@ def close_neo4j(neo4j: Neo4jConnection):
 async def push_to_neo4j(comments: 'list[CommentThread]'):
     if len(comments) == 0:
         return
+    log.info("neo4j will save %d comments", len(comments))
     neo4j = await get_neo4j()  # type: ignore
-
     await neo4j_blocking_query(neo4j, queries.all_comment_query,  # type: ignore
                                list(map(attrgetter("top_level_comment"), comments)))
     await close_neo4j(neo4j)  # type: ignore
@@ -164,6 +166,7 @@ async def insert_update(pool: asyncpg.Pool, error: bool, video_id: VideoId):
     update_time = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE if error else datetime.now()
     async with pool.acquire() as con:
         await con.execute(queries.update_insert_query, video_id, update_time)
+        log.info("inserted to postgres videoId")
 
 
 def get_bytes_video_id(c: CommentThread): return str.encode(
@@ -175,6 +178,7 @@ def get_replies_count(v: CommentThread): return pickle.dumps(
 
 
 async def main(data: CommentsConfig):
+    log.info("update frequency: %d", data.update_frequency)
     videosConsumer = AIOKafkaConsumer(
         'new_videos',
         bootstrap_servers='kafka:9092',

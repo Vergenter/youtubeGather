@@ -1,3 +1,4 @@
+import logging
 from dataclasses import asdict
 import json
 
@@ -19,10 +20,9 @@ import asyncpg
 import os
 from operator import attrgetter
 
-
-import logging
+LOGGER_NAME = "CHANNELS"
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
-log = logging.getLogger(__name__)
+log = logging.getLogger(LOGGER_NAME)
 
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
@@ -68,6 +68,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
                 values = {ChannelId(i["id"]) for i in await con.fetch(queries.new_channel_query, list(map(ChannelId, map(attrgetter("value"), messages))))}
                 if kafka_commit:
                     kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
+                log.info("From kafka got %d new channels", len(values))
                 for value in values:
                     if value not in new_channels:
                         new_channels.add(value)
@@ -142,6 +143,7 @@ async def push_to_neo4j(channels: 'list[Channel]', new_channels: 'set[ChannelId]
     channels_to_create = [
         channel for channel in channels if channel.channel_id in new_channels]
     neo4j = await get_neo4j()  # type: ignore
+    log.info("neo4j will save %d videos", len(channels))
     if len(channels_to_create) > 0:
         await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_channel_query, channels_to_create),  # type: ignore
                              neo4j_blocking_query(neo4j, queries.dynamic_channel_query, channels_to_create))
@@ -168,6 +170,7 @@ async def insert_update(pool: asyncpg.Pool, channels: 'list[Channel]', potential
 
 
 async def main(data: ChannelsConfig):
+    log.info("update frequency: %d", data.update_frequency)
     channelConsumer = AIOKafkaConsumer(
         'new_channels',
         bootstrap_servers='kafka:9092',
@@ -201,6 +204,7 @@ async def main(data: ChannelsConfig):
         # add all items to set
         async for channels_ids in get_new_chunk_gen(processing_channel, 30, YOUTUBE_CHANNELS_MAX_CHUNK):
             # timeout even for one day
+            log.info("fetching data from youtube")
             channels = await fetch_channels_from_yt(channels_ids)
             await push_to_neo4j(channels, new_channels)
             await insert_update(pool, channels, channels_ids)

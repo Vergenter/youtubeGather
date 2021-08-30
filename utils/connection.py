@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from neo4j import GraphDatabase
 from time import time
-import logging
-import datetime
 import os
 
 
@@ -53,7 +51,6 @@ class Neo4jConnection:
         total_bathes = (len(rows)+batch_size-1)//batch_size
         batch = 0
         start = time()
-        logging.info("[INSERTING] starting %s", datetime.datetime.now())
         while batch * batch_size < len(rows):
             current_batch = rows[batch*batch_size: (batch+1)*batch_size]
             res = self.query(query,
@@ -61,7 +58,5 @@ class Neo4jConnection:
                                  'rows': current_batch})
             total += len(current_batch)
             batch += 1
-            logging.info(
-                "[INSERTING][batch:%d/%d] total: %d duration from start: %d", batch, total_bathes, total, int(time()-start))
 
         return Result(total, batch, time()-start)

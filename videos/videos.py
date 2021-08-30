@@ -1,3 +1,4 @@
+import logging
 from dataclasses import asdict
 import json
 import kafka_send
@@ -23,10 +24,9 @@ import asyncpg
 import os
 from operator import attrgetter
 
-
-import logging
+LOGGER_NAME = "VIDEOS"
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
-log = logging.getLogger(__name__)
+log = logging.getLogger(LOGGER_NAME)
 
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
@@ -71,6 +71,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
                 values = {VideoId(i["id"]) for i in await con.fetch(queries.new_videos_query, list(map(VideoId, map(attrgetter("value"), messages))))}
                 if kafka_commit:
                     kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
+                log.info("From kafka got %d new videoId", len(values))
                 for value in values:
                     if value not in new_videos:
                         new_videos.add(value)
@@ -144,6 +145,7 @@ async def push_to_neo4j(videos: 'list[Video]', new_videos: 'set[VideoId]'):
         return
     videos_to_create = [
         video for video in videos if video.video_id in new_videos]
+    log.info("neo4j will save %d videos", len(videos))
     neo4j = await get_neo4j()  # type: ignore
     if len(videos_to_create) > 0:
         await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_video_query, videos_to_create),  # type: ignore
@@ -171,6 +173,7 @@ async def insert_update(pool: asyncpg.Pool, videos: 'list[Video]', potentialy_wr
 
 
 async def main(data: VideosConfig):
+    log.info("update frequency: %d", data.update_frequency)
     videosConsumer = AIOKafkaConsumer(
         'new_videos',
         bootstrap_servers='kafka:9092',
@@ -205,6 +208,7 @@ async def main(data: VideosConfig):
         # add all items to set
         async for videos_ids in get_new_chunk_gen(processing_videos, 30, YOUTUBE_VIDEOS_MAX_CHUNK):
             # timeout even for one day
+            log.info("fetching data from youtube")
             videos = await fetch_videos_from_yt(videos_ids)
             await push_to_neo4j(videos, new_videos)
             await insert_update(pool, videos, videos_ids)

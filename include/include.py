@@ -19,11 +19,15 @@ async def main(data: IncludeConfig):
             msg = str.encode(channel)
             await producer.send_and_wait("new_channels", value=msg, key=msg)
             send_channels += 1
+            if send_channels % 10 == 0:
+                log.info("send %d channels", send_channels)
 
         for video in data.videos:
             msg = str.encode(video)
             await producer.send_and_wait("new_videos", value=msg, key=msg)
             send_videos += 1
+            if send_videos % 10 == 0:
+                log.info("send %d videos", send_videos)
     finally:
         await producer.stop()
         log.info("send %d channels and %d videos", send_channels, send_videos)
