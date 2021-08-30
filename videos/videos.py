@@ -1,5 +1,6 @@
 from dataclasses import asdict
 import json
+import kafka_send
 from video_model import from_json
 from videos_config import from_yaml
 from videos_config import VideosConfig
@@ -98,6 +99,8 @@ async def fetch_videos_from_yt(videos_ids: 'list[VideoId]'):
                 result = await aiogoogle.as_api_key(req)
                 break
             except HTTPError as err:
+                if err.res.status_code != 403 or err.res.content['error']['errors'][0]['reason'] != "quotaExceeded":
+                    raise
                 now = datetime.now()
                 same_day_update = datetime(
                     year=now.year, month=now.month, day=now.day, hour=10)
@@ -206,9 +209,8 @@ async def main(data: VideosConfig):
             await push_to_neo4j(videos, new_videos)
             await insert_update(pool, videos, videos_ids)
             new_videos.difference_update(videos_ids)
-            for video in videos:
-                msg = str.encode(video.channel_id)
-                await producer.send_and_wait("new_channels", value=msg, key=msg)
+            await kafka_send.kafka_send(producer, "new_channels", map(
+                kafka_send.channel_parser, videos))
 
     finally:
         await asyncio.gather(videosConsumer.stop(), updateConsumer.stop(), pool.close(), producer.stop())
