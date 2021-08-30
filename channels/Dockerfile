@@ -7,7 +7,7 @@ WORKDIR /channels
 COPY requirements.txt /channels/requirements.txt
 RUN python -m pip install --upgrade pip
 RUN python -m pip install -r requirements.txt
-ARG KAFKA_PORT 
+
 ### DEBUG ###
 FROM base as debug
 
