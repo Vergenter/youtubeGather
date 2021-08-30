@@ -5,6 +5,17 @@ import shlex
 from dataclasses import dataclass
 from utils.types import ChannelId, PlaylistId
 
+import re
+
+
+def quoted_split(s):
+    def strip_quotes(s):
+        if s and (s[0] == '"' or s[0] == "'") and s[0] == s[-1]:
+            return s[1:-1]
+        return s
+    return [strip_quotes(p).replace('\\"', '"').replace("\\'", "'")
+            for p in re.findall(r'(?:[^"\s]*"(?:\\.|[^"])*"[^"\s]*)+|(?:[^\'\s]*\'(?:\\.|[^\'])*\'[^\'\s]*)+|[^\s]+', s)]
+
 
 @dataclass
 class Channel:
@@ -43,13 +54,13 @@ def from_json(json: Any):
         videoCount=json["statistics"]["videoCount"],
         topicCategories=json.get("topicDetails", {}).get(
             "topicCategories", []),
-        madeForKids=json["status"]["madeForKids"],
+        madeForKids=json["status"].get("madeForKids", False),
         public=json["status"]["privacyStatus"] == "public",
         isLinked=json["status"]["isLinked"],
         trackingAnalyticsAccountId=json["brandingSettings"]["channel"].get(
             "trackingAnalyticsAccountId"),
-        tags=shlex.split(json["brandingSettings"]
-                         ["channel"].get("keywords", "")),
+        tags=quoted_split(json["brandingSettings"]
+                          ["channel"].get("keywords", "")),
         unsubscribedTrailer=json["brandingSettings"]["channel"].get(
             "unsubscribedTrailer"),
         country=json["brandingSettings"]["channel"].get("country"),

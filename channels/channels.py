@@ -114,7 +114,7 @@ async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
         for item in result["items"]:
             try:
                 parsed.append(from_json(item))
-            except KeyError:
+            except (KeyError, ValueError):
                 rejected.append(item)
         if len(rejected) > 0:
             with open(f'./rejected/channels-{datetime.now()}.json', 'w') as f:
@@ -143,7 +143,7 @@ async def push_to_neo4j(channels: 'list[Channel]', new_channels: 'set[ChannelId]
     channels_to_create = [
         channel for channel in channels if channel.channel_id in new_channels]
     neo4j = await get_neo4j()  # type: ignore
-    log.info("neo4j will save %d videos", len(channels))
+    log.info("neo4j will save %d channels", len(channels))
     if len(channels_to_create) > 0:
         await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_channel_query, channels_to_create),  # type: ignore
                              neo4j_blocking_query(neo4j, queries.dynamic_channel_query, channels_to_create))
