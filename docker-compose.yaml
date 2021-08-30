@@ -32,6 +32,43 @@ services:
       - ./utils:/channels/utils
       - ./rejected:/channels/rejected
 
+  comments:
+    build:
+      context: comments
+      target: debug
+    ports:
+      - 5678:5678 # debugger port only if target: debug
+    environment:
+      - POSTGRES_DBNAME=commentdb
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_ADMIN}
+      - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+      - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
+      - NEO4J_BOLT_URL=bolt://neo4j:7687
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./utils:/comments/utils
+
+  replies:
+    build:
+      context: replies
+      target: production
+    environment:
+      - POSTGRES_DBNAME=repliesdb
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_ADMIN}
+      - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
+      - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./utils:/replies/utils
+
   videos:
     build:
       context: videos
@@ -53,19 +90,6 @@ services:
     volumes:
       - ./utils:/videos/utils
       - ./rejected:/videos/rejected
-  comments:
-    build:
-      context: comments
-      target: production
-    environment:
-      - POSTGRES_ADMIN=${POSTGRES_ADMIN}
-      - POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
-      - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
-    # ports:
-    #   - 5678:5678 # debugger port only if target: debug
-    volumes:
-      - ./rejected:/comments/rejected
-
   zookeeper:
     restart: unless-stopped
     image: confluentinc/cp-zookeeper:latest
@@ -88,7 +112,7 @@ services:
     restart: unless-stopped
     image: confluentinc/cp-kafka:latest
     healthcheck:
-      test: kafka-topics --bootstrap-server localhost:9092 --topic update --describe
+      test: kafka-topics --list --zookeeper zookeeper:2181
       interval: 3s
       timeout: 3s
       retries: 15

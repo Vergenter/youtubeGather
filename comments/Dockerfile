@@ -1,6 +1,7 @@
 FROM python as base
 
 RUN mkdir /comments/
+RUN mkdir /comments/utils
 WORKDIR /comments
 
 COPY requirements.txt /comments/requirements.txt
@@ -13,7 +14,6 @@ FROM base as debug
 RUN python -m pip install debugpy
 
 COPY . /comments/
-
 ENTRYPOINT [ "python", "-m", "debugpy","--wait-for-client", "--listen", "0.0.0.0:5678","comments.py" ]
 
 ### PRODUCTION ###

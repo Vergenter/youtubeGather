@@ -24,3 +24,20 @@ CREATE SCHEMA videos
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
 	)
+
+CREATE DATABASE commentdb
+    WITH 
+    OWNER = :POSTGRES_ADMIN
+    ENCODING = 'UTF8'
+    LC_COLLATE = 'en_US.utf8'
+    LC_CTYPE = 'en_US.utf8'
+    TABLESPACE = pg_default
+    CONNECTION LIMIT = -1;
+
+\connect commentdb;
+CREATE SCHEMA comments;
+	CREATE TABLE videos_comments (
+		video_id text NOT NULL,
+		update TIMESTAMP NOT NULL,
+		CONSTRAINT video_comments_update PRIMARY KEY(video_id,update)
+	);
