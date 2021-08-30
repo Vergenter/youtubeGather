@@ -54,6 +54,7 @@ def main():
         ASSERT c.country IS UNIQUE""")
 
     conn.close()
+    print("SUCCESS")
 
 
 if __name__ == "__main__":
