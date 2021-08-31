@@ -175,7 +175,7 @@ async def main(data: RepliesConfig):
         bootstrap_servers='kafka:9092',
         enable_auto_commit=False,      # Will disable autocommit
         auto_offset_reset="earliest",  # If committed offset not found, start from beginning
-        group_id="replyTest3Module"
+        group_id="reply2Module"
     )
     updateConsumer = AIOKafkaConsumer(
         'updates',
