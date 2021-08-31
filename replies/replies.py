@@ -154,6 +154,9 @@ async def youtube_fetch_childrens(parent_id: CommentId):
                             json.dump(rejected, f)
                     yield parsed
                     page_number += 1
+                    if page_number % 10 == 0:
+                        log.info("Fetching many responses %d",
+                                 page_number*YOUTUBE_COMMENTS_THREAD_CHUNK)
                 # precisely (page_number-1)*YOUTUBE_COMMENTS_THREAD_CHUNK + len(rejected) + len(parsed)
                 log.debug("Fetched from youtube around %d comments",
                           page_number*YOUTUBE_COMMENTS_THREAD_CHUNK)

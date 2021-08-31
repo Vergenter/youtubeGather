@@ -46,7 +46,7 @@ async def kafka_produce(consumer: AIOKafkaConsumer, queue: asyncio.Queue):
 
 async def kafka_commit(consumer: AIOKafkaConsumer, msg):
     tp = TopicPartition(msg.topic, msg.partition)
-    log.info("kafka commit new offset %s", msg.offset+1)
+    log.debug("kafka commit new offset %s", msg.offset+1)
     await consumer.commit({tp: msg.offset+1})
 
 
@@ -71,7 +71,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
                 values = {VideoId(i["id"]) for i in await con.fetch(queries.new_videos_query, list(map(VideoId, map(attrgetter("value"), messages))))}
                 if kafka_commit:
                     kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
-                log.info("From kafka got %d new videoId", len(values))
+                log.debug("From kafka got %d new videoId", len(values))
                 for value in values:
                     if value not in new_videos:
                         new_videos.add(value)
@@ -79,6 +79,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
 
 
 async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
+    log.info("update triggered")
     if frequency > 0:
         async for updates in get_new_chunk_queue(inQueue, 5):
             if len(updates) > 0:
@@ -109,8 +110,8 @@ async def fetch_videos_from_yt(videos_ids: 'list[VideoId]'):
                     year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
                 next_update = same_day_update if now.hour < 10 else next_day_update
                 delta = (datetime.now()-next_update)
-                log.debug(
-                    "youtube fetch failed %s and is waiting for %s", err.res, delta)
+                log.warning(
+                    "youtube fetch failed and is waiting for %s", delta)
                 await asyncio.sleep(delta.total_seconds())
 
         rejected = []
@@ -169,7 +170,7 @@ async def insert_update(pool: asyncpg.Pool, videos: 'list[Video]', potentialy_wr
             potentialy_wrong_videos_ids)-len(videos))
     async with pool.acquire() as con:
         await con.executemany(queries.update_insert_query, videos_to_update)
-        log.info("inserted to postgres %d updated", len(videos))
+        log.debug("inserted to postgres %d updated", len(videos))
 
 
 async def main(data: VideosConfig):
@@ -208,7 +209,7 @@ async def main(data: VideosConfig):
         # add all items to set
         async for videos_ids in get_new_chunk_queue(processing_videos, 30, YOUTUBE_VIDEOS_MAX_CHUNK):
             # timeout even for one day
-            log.info("fetching data from youtube")
+            log.debug("fetching data from youtube")
             videos = await fetch_videos_from_yt(videos_ids)
             await push_to_neo4j(videos, new_videos)
             await insert_update(pool, videos, videos_ids)
