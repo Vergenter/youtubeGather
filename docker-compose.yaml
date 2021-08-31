@@ -35,9 +35,9 @@ services:
   comments:
     build:
       context: comments
-      target: debug
-    ports:
-      - 5678:5678 # debugger port only if target: debug
+      target: production
+    # ports:
+    #   - 5678:5678 # debugger port only if target: debug
     environment:
       - POSTGRES_DBNAME=commentdb
       - POSTGRES_HOST=postgres
@@ -58,12 +58,17 @@ services:
     build:
       context: replies
       target: production
+    # ports:
+    #   - 5678:5678 # debugger port only if target: debug
     environment:
-      - POSTGRES_DBNAME=repliesdb
+      - POSTGRES_DBNAME=replydb
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=${POSTGRES_ADMIN}
       - POSTGRES_PASSWORD=${POSTGRES_ADMIN_PASSWORD}
       - YOUTUBE_API_KEY_V3=${YOUTUBE_API_KEY_V3}
+      - NEO4J_BOLT_URL=bolt://neo4j:7687
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
     depends_on:
       kafka:
         condition: service_healthy
