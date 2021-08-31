@@ -16,7 +16,7 @@ with row,comment
 CREATE (commentStatistics:CommentStatistics{
     textOriginal: row.textOriginal,
     updatedAt: row.updatedAt,
-    likeCount: row.likeCount,
+    likeCount: row.likeCount
     })
 with commentStatistics,row,comment
 CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)

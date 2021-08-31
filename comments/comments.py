@@ -215,7 +215,8 @@ async def main(data: CommentsConfig):
             await insert_update(pool, error, video_id)
             new_videos.remove(video_id)
             for comment in comments:
-                await producer.send_and_wait("comment_replies", key=get_bytes_video_id(comment), value=get_replies_count(comment))
+                if len(comment.replies) > 0:
+                    await producer.send_and_wait("comment_replies", key=get_bytes_video_id(comment), value=get_replies_count(comment))
     finally:
         await asyncio.gather(videosConsumer.stop(), updateConsumer.stop(), pool.close(), producer.stop())
 

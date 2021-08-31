@@ -54,8 +54,10 @@ async def kafka_callback(consumer: AIOKafkaConsumer, callback: Callable[[Consume
 def process_messages(pool: asyncpg.Pool):
     async def f(c: ConsumerRecord):
         parsed = parse_messages(c)
+        if len(parsed.replies) == 0:
+            return
         update = datetime.now()
-        if parsed.total_replies < len(parsed.replies):
+        if parsed.total_replies > len(parsed.replies):
             try:
                 async for replies in get_new_chunk_iter(youtube_fetch_childrens(parsed.parent_id), 2):
                     await push_to_neo4j(replies)
@@ -173,7 +175,7 @@ async def main(data: RepliesConfig):
         bootstrap_servers='kafka:9092',
         enable_auto_commit=False,      # Will disable autocommit
         auto_offset_reset="earliest",  # If committed offset not found, start from beginning
-        group_id="replyModule"
+        group_id="replyTest3Module"
     )
     updateConsumer = AIOKafkaConsumer(
         'updates',
