@@ -11,7 +11,7 @@ import os
 
 from aiogoogle.client import Aiogoogle
 from aiogoogle.excs import HTTPError
-from utils.chunk_gen import get_new_chunk_gen
+from utils.chunk_gen import get_new_chunk_queue
 import queries
 from aiokafka.consumer.consumer import AIOKafkaConsumer
 import asyncpg
@@ -61,7 +61,7 @@ async def kafka_commit_from_messages(consumer, values, messages):
 
 async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue: asyncio.Queue, outQueue: asyncio.Queue, new_videos: 'set[VideoId]'):
     kafka_commit = True
-    async for messages in get_new_chunk_gen(inQueue, 5, 1000):
+    async for messages in get_new_chunk_queue(inQueue, 5, 1000):
         if len(messages) > 0:
             async with pool.acquire() as con:
                 # need to parse args to ids
@@ -77,7 +77,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
 
 async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
     if frequency > 0:
-        async for updates in get_new_chunk_gen(inQueue, 5):
+        async for updates in get_new_chunk_queue(inQueue, 5):
             if len(updates) > 0:
                 async with pool.acquire() as con:
                     values = await con.fetch(queries.videos_update_query, datetime.now() - timedelta(days=frequency))
@@ -122,7 +122,7 @@ async def youtube_fetch_comments(video_queue: asyncio.Queue[VideoId]):
                     delta = (datetime.now()-next_update)
                     log.debug(
                         "youtube fetch failed %s and is waiting for %s", err.res, delta)
-                    asyncio.sleep(delta.total_seconds())
+                    await asyncio.sleep(delta.total_seconds())
             rejected = []
             parsed: list[CommentThread] = []
             for item in all_items:
@@ -217,7 +217,7 @@ async def main(data: CommentsConfig):
             for comment in comments:
                 await producer.send_and_wait("comment_replies", key=get_bytes_video_id(comment), value=get_replies_count(comment))
     finally:
-        await producer.stop()
+        await asyncio.gather(videosConsumer.stop(), updateConsumer.stop(), pool.close(), producer.stop())
 
 if __name__ == "__main__":
     with open("config.yaml", 'r', encoding='utf-8') as f:

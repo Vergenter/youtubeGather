@@ -14,7 +14,7 @@ from utils.sync_to_async import run_in_executor
 from datetime import datetime, timedelta
 import queries
 from aiogoogle.client import Aiogoogle
-from utils.chunk_gen import get_new_chunk_gen
+from utils.chunk_gen import get_new_chunk_queue
 from kafka.structs import TopicPartition
 import yaml
 from aiokafka import AIOKafkaConsumer
@@ -64,7 +64,7 @@ async def kafka_commit_from_messages(consumer, values, messages):
 
 async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue: asyncio.Queue, outQueue: asyncio.Queue, new_videos: 'set[VideoId]'):
     kafka_commit = True
-    async for messages in get_new_chunk_gen(inQueue, 5, 1000):
+    async for messages in get_new_chunk_queue(inQueue, 5, 1000):
         if len(messages) > 0:
             async with pool.acquire() as con:
                 # need to parse args to ids
@@ -80,7 +80,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
 
 async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
     if frequency > 0:
-        async for updates in get_new_chunk_gen(inQueue, 5):
+        async for updates in get_new_chunk_queue(inQueue, 5):
             if len(updates) > 0:
                 async with pool.acquire() as con:
                     values = await con.fetch(queries.videos_update_query, datetime.now() - timedelta(days=frequency))
@@ -111,7 +111,7 @@ async def fetch_videos_from_yt(videos_ids: 'list[VideoId]'):
                 delta = (datetime.now()-next_update)
                 log.debug(
                     "youtube fetch failed %s and is waiting for %s", err.res, delta)
-                asyncio.sleep(delta.total_seconds())
+                await asyncio.sleep(delta.total_seconds())
 
         rejected = []
         for item in result["items"]:
@@ -206,7 +206,7 @@ async def main(data: VideosConfig):
             pool, data.update_frequency, update_videos, processing_videos))
         # long waiting chunk for youtube
         # add all items to set
-        async for videos_ids in get_new_chunk_gen(processing_videos, 30, YOUTUBE_VIDEOS_MAX_CHUNK):
+        async for videos_ids in get_new_chunk_queue(processing_videos, 30, YOUTUBE_VIDEOS_MAX_CHUNK):
             # timeout even for one day
             log.info("fetching data from youtube")
             videos = await fetch_videos_from_yt(videos_ids)

@@ -14,7 +14,7 @@ def to_update(update: datetime):
     return channel_id_to_update
 
 
-videos_update_query = 'select distinct video_id from videos.videos where video_id not in (select video_id from videos.videos where update > $1;'
+videos_update_query = 'select distinct video_id from videos.videos where video_id not in (select video_id from videos.videos where update > $1);'
 new_videos_query = 'SELECT id FROM unnest($1::text[]) as V(id) EXCEPT SELECT video_id FROM videos.videos;'
 update_insert_query = 'INSERT INTO videos.videos VALUES ($1,$2)'
 

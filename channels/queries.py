@@ -13,7 +13,7 @@ def to_update(update: datetime):
     return channel_id_to_update
 
 
-channel_update_query = 'select distinct channel_id from channels.channels where channel_id not in (select channel_id from channels.channels where update > $1;'
+channel_update_query = 'select distinct channel_id from channels.channels where channel_id not in (select channel_id from channels.channels where update > $1);'
 new_channel_query = 'SELECT id FROM unnest($1::text[]) as V(id) EXCEPT SELECT channel_id FROM channels.channels;'
 update_insert_query = 'INSERT INTO channels.channels VALUES ($1,$2)'
 

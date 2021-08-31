@@ -9,7 +9,7 @@ from channel_model import Channel, from_json
 from datetime import datetime, timedelta
 import queries
 from aiogoogle.client import Aiogoogle
-from utils.chunk_gen import get_new_chunk_gen
+from utils.chunk_gen import get_new_chunk_queue
 from kafka.structs import TopicPartition
 from channels_config import ChannelsConfig, from_yaml
 import yaml
@@ -61,7 +61,7 @@ async def kafka_commit_from_messages(consumer, values, messages):
 async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue: asyncio.Queue, outQueue: asyncio.Queue, new_channels: 'set[ChannelId]'):
     """new_channels parameter to provide new channel only once to outQueue"""
     kafka_commit = True
-    async for messages in get_new_chunk_gen(inQueue, 5, 1000):
+    async for messages in get_new_chunk_queue(inQueue, 5, 1000):
         if len(messages) > 0:
             async with pool.acquire() as con:
                 # need to parse args to ids
@@ -77,7 +77,7 @@ async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue
 
 async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
     if frequency > 0:
-        async for updates in get_new_chunk_gen(inQueue, 5):
+        async for updates in get_new_chunk_queue(inQueue, 5):
             if len(updates) > 0:
                 async with pool.acquire() as con:
                     values = await con.fetch(queries.channel_update_query, datetime.now() - timedelta(days=frequency))
@@ -108,7 +108,7 @@ async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
                 delta = (datetime.now()-next_update)
                 log.debug(
                     "youtube fetch failed %s and is waiting for %s", err.res, delta)
-                asyncio.sleep(delta.total_seconds())
+                await asyncio.sleep(delta.total_seconds())
 
         rejected = []
         for item in result["items"]:
@@ -202,7 +202,7 @@ async def main(data: ChannelsConfig):
             pool, data.update_frequency, update_channel, processing_channel))
         # long waiting chunk for youtube
         # add all items to set
-        async for channels_ids in get_new_chunk_gen(processing_channel, 30, YOUTUBE_CHANNELS_MAX_CHUNK):
+        async for channels_ids in get_new_chunk_queue(processing_channel, 30, YOUTUBE_CHANNELS_MAX_CHUNK):
             # timeout even for one day
             log.info("fetching data from youtube")
             channels = await fetch_channels_from_yt(channels_ids)
