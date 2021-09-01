@@ -113,11 +113,11 @@ def process_messages(pool: asyncpg.Pool):
             if parsed.total_replies > len(parsed.replies):
                 try:
                     async for replies in get_new_chunk_iter(youtube_fetch_childrens(parsed.parent_id), 2):
-                        await push_to_neo4j(replies)
+                        await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in replies])
                 except InputError:
                     update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
             else:
-                await push_to_neo4j(parsed.replies)
+                await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in parsed.replies])
             with postgres_insert_time.time():
                 async with pool.acquire() as con:
                     await con.execute(queries.updated_insert_query, parsed.parent_id, update)
@@ -140,7 +140,7 @@ def process_update(pool: asyncpg.Pool, frequency: int):
                 update = datetime.now()
                 try:
                     async for replies in get_new_chunk_iter(youtube_fetch_childrens(parent_id), 2):
-                        await push_to_neo4j(replies)
+                        await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in replies])
                 except InputError:
                     update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
                 with postgres_insert_time.time():
@@ -151,29 +151,14 @@ def process_update(pool: asyncpg.Pool, frequency: int):
 
 
 @run_in_executor
-def neo4j_blocking_query(neo4j: Neo4jConnection, query: str, videos: 'list[Reply]'):
-    neo4j.bulk_insert_data(query, list(map(asdict, videos)))
-
-
-@run_in_executor
-def get_neo4j():
-    return Neo4jConnection()
-
-
-@run_in_executor
-def close_neo4j(neo4j: Neo4jConnection):
-    neo4j.close()
-
-
-async def push_to_neo4j(comments: 'list[Reply]'):
-    if len(comments) == 0:
+def push_to_neo4j(query: str, items: 'list[dict]'):
+    if len(items) == 0:
         return
-    log.info("neo4j will save %d comments", len(comments))
-    neo4j = await get_neo4j()  # type: ignore
+    log.info("neo4j will save %d items", len(items))
     with neo4j_insert_time.time():
-        await neo4j_blocking_query(neo4j, queries.all_comment_query,  # type: ignore
-                                   comments)
-    await close_neo4j(neo4j)  # type: ignore
+        neo4j = Neo4jConnection()
+        neo4j.bulk_insert_data(query, items)
+        neo4j.close()
 
 
 def parse_messages(message):

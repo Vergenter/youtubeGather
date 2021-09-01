@@ -138,28 +138,13 @@ async def youtube_fetch_comments(video_queue: asyncio.Queue[VideoId]):
 
 
 @run_in_executor
-def neo4j_blocking_query(neo4j: Neo4jConnection, query: str, videos: 'list[Comment]'):
-    neo4j.bulk_insert_data(query, list(map(asdict, videos)))
-
-
-@run_in_executor
-def get_neo4j():
-    return Neo4jConnection()
-
-
-@run_in_executor
-def close_neo4j(neo4j: Neo4jConnection):
-    neo4j.close()
-
-
-async def push_to_neo4j(comments: 'list[CommentThread]'):
-    if len(comments) == 0:
+def push_to_neo4j(query: str, items: 'list[dict]'):
+    if len(items) == 0:
         return
-    log.info("neo4j will save %d comments", len(comments))
-    neo4j = await get_neo4j()  # type: ignore
-    await neo4j_blocking_query(neo4j, queries.all_comment_query,  # type: ignore
-                               list(map(attrgetter("top_level_comment"), comments)))
-    await close_neo4j(neo4j)  # type: ignore
+    log.info("neo4j will save %d items", len(items))
+    neo4j = Neo4jConnection()
+    neo4j.bulk_insert_data(query, items)
+    neo4j.close()
 
 
 async def insert_update(pool: asyncpg.Pool, error: bool, video_id: VideoId):
@@ -210,12 +195,14 @@ async def main(data: CommentsConfig):
                                            pool, input_videos, processing_videos, new_videos))
         asyncio.create_task(process_update(
             pool, data.update_frequency, update_videos, processing_videos))
-        async for comments, video_id, error in youtube_fetch_comments(processing_videos):
+        async for comment_threads, video_id, error in youtube_fetch_comments(processing_videos):
             if not error:
-                await push_to_neo4j(comments)
+                comments = [asdict(comment_thread.top_level_comment)
+                            for comment_thread in comment_threads]
+                await push_to_neo4j(queries.all_comment_query, comments)
             await insert_update(pool, error, video_id)
             new_videos.remove(video_id)
-            for comment in comments:
+            for comment in comment_threads:
                 if len(comment.replies) > 0:
                     await producer.send_and_wait("comment_replies", key=get_bytes_video_id(comment), value=get_replies_count(comment))
     finally:

@@ -147,15 +147,15 @@ async def push_to_neo4j(videos: 'list[Video]', new_videos: 'set[VideoId]'):
     videos_to_create = [
         video for video in videos if video.video_id in new_videos]
     log.info("neo4j will save %d videos", len(videos))
-    neo4j = await get_neo4j()  # type: ignore
+    neo4j = await get_neo4j()
     if len(videos_to_create) > 0:
-        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_video_query, videos_to_create),  # type: ignore
+        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_video_query, videos_to_create),
                              neo4j_blocking_query(neo4j, queries.dynamic_video_query, videos_to_create))
     else:
         await neo4j_blocking_query(
-            neo4j, queries.dynamic_video_query, videos_to_create)  # type: ignore
+            neo4j, queries.dynamic_video_query, videos_to_create)
 
-    await close_neo4j(neo4j)  # type: ignore
+    await close_neo4j(neo4j)
 
 
 async def insert_update(pool: asyncpg.Pool, videos: 'list[Video]', potentialy_wrong_videos_ids: 'list[VideoId]'):

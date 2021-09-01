@@ -143,16 +143,16 @@ async def push_to_neo4j(channels: 'list[Channel]', new_channels: 'set[ChannelId]
         return
     channels_to_create = [
         channel for channel in channels if channel.channel_id in new_channels]
-    neo4j = await get_neo4j()  # type: ignore
+    neo4j = await get_neo4j()
     log.info("neo4j will save %d channels", len(channels))
     if len(channels_to_create) > 0:
-        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_channel_query, channels_to_create),  # type: ignore
+        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_channel_query, channels_to_create),
                              neo4j_blocking_query(neo4j, queries.dynamic_channel_query, channels_to_create))
     else:
         await neo4j_blocking_query(
-            neo4j, queries.dynamic_channel_query, channels_to_create)  # type: ignore
+            neo4j, queries.dynamic_channel_query, channels_to_create)
 
-    await close_neo4j(neo4j)  # type: ignore
+    await close_neo4j(neo4j)
 
 
 async def insert_update(pool: asyncpg.Pool, channels: 'list[Channel]', potentialy_wrong_channels_ids: 'list[ChannelId]'):
