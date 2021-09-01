@@ -4,7 +4,7 @@ from typing import Iterable, TypeVar
 T = TypeVar('T')
 
 
-def chunked(size: int, iterable: Iterable[T]):
+def chunked(size: int, iterable: Iterable[T]) -> 'takewhile[list[T]]':
     """
     Slice an iterable into chunks of n elements
     :type size: int

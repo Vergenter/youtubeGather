@@ -12,3 +12,10 @@ scrape_configs:
 
     static_configs:
       - targets: ["replies:8000"]
+  - job_name: "comments"
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+      - targets: ["comments:8000"]

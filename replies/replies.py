@@ -195,18 +195,18 @@ async def youtube_fetch_childrens(parent_id: CommentId):
                 rejected = []
                 parsed = []
                 async for page in full_res:
+                    quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
                     _total_duration += max(default_timer() - _start, 0)
                     # duration
                     rejected = []
                     parsed: list[Reply] = []
                     for item in page['items']:
-                        quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
                         try:
                             parsed.append(from_json(item))
                         except KeyError:
                             rejected.append(item)
+                            rejected_comments.inc()
                     if len(rejected) > 0:
-                        rejected_comments.inc(len(rejected))
                         with open(f'./rejected/replies-{datetime.now()}.json', 'w') as f:
                             json.dump(rejected, f)
                     yield parsed

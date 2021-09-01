@@ -36,7 +36,8 @@ services:
     build:
       context: comments
       target: production
-    # ports:
+    ports:
+      - :8000 # metrics
     #   - 5678:5678 # debugger port only if target: debug
     environment:
       - POSTGRES_DBNAME=commentdb
@@ -60,7 +61,7 @@ services:
       target: production
     ports:
       # - 5678:5678 # debugger port only if target: debug
-      - 8000:8000 # metrics
+      - :8000 # metrics
     environment:
       - POSTGRES_DBNAME=replydb
       - POSTGRES_HOST=postgres

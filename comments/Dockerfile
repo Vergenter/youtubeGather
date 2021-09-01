@@ -7,13 +7,14 @@ WORKDIR /comments
 COPY requirements.txt /comments/requirements.txt
 RUN python -m pip install --upgrade pip
 RUN python -m pip install -r requirements.txt
-
+EXPOSE 8000
 ### DEBUG ###
 FROM base as debug
 
 RUN python -m pip install debugpy
 
 COPY . /comments/
+EXPOSE 5678
 ENTRYPOINT [ "python", "-m", "debugpy","--wait-for-client", "--listen", "0.0.0.0:5678","comments.py" ]
 
 ### PRODUCTION ###

@@ -1,3 +1,4 @@
+from json_error import JsonError
 from dataclasses import dataclass
 from datetime import datetime
 from utils.types import ChannelId, CommentId, ReplyId, VideoId
@@ -50,6 +51,8 @@ class Reply:
 
 
 def reply_from_json(reply):
+    if not reply["snippet"].get("authorChannelId"):
+        raise JsonError(reply["id"], "No channel Id")
     return Reply(
         reply_id=ReplyId(reply["id"]),
         video_id=VideoId(reply["snippet"]["videoId"]),
