@@ -58,8 +58,9 @@ services:
     build:
       context: replies
       target: production
-    # ports:
-    #   - 5678:5678 # debugger port only if target: debug
+    ports:
+      # - 5678:5678 # debugger port only if target: debug
+      - 8000:8000 # metrics
     environment:
       - POSTGRES_DBNAME=replydb
       - POSTGRES_HOST=postgres
@@ -166,7 +167,7 @@ services:
     ports:
       - "5050:80"
     volumes:
-      - ~/images//pgadmin:/var/lib/pgadmin
+      - ~/images/pgadmin:/var/lib/pgadmin
     depends_on:
       - postgres
   neo4j:
@@ -185,3 +186,10 @@ services:
       # Raise memory limits
       - NEO4J_AUTH=${NEO4J_USERNAME}/${NEO4J_PASSWORD}
       - NEO4J_dbms_memory_heap_initial__size=2G
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ~/images/prometheus:/prometheus

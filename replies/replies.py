@@ -14,7 +14,7 @@ from utils.types import CommentId
 from replies_model import Reply
 from datetime import datetime, timedelta
 import logging
-from operator import attrgetter
+from prometheus_client import Counter, Gauge, start_http_server, Histogram, Enum, Info
 import os
 
 import queries
@@ -30,8 +30,9 @@ from replies_config import from_yaml, RepliesConfig
 import yaml
 import asyncio
 import pickle
+from timeit import default_timer
 
-
+YOUTUBE_FETCH_QUOTA_COST = 1
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 YOUTUBE_COMMENTS_THREAD_CHUNK = 100
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
@@ -43,6 +44,51 @@ LOGGER_NAME = "REPLIES"
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 log = logging.getLogger(LOGGER_NAME)
 
+quota_usage = Counter("quota_usage", "usage of quota in replies module")
+
+inprogress_update = Gauge('inprogress_updates',
+                          'inprogress comment_id to fetch childrens')
+
+
+replies_messages_total = Counter(
+    'replies_messages_total', "messages processed from comment_replies kafka topic", ['state'])
+rejected_comments = replies_messages_total.labels(state='rejected')
+
+unparsable_messages = replies_messages_total.labels(state='unparsable')
+
+processed_messages = replies_messages_total.labels(state='processed')
+
+update_events = Counter("update_events", "updates triggered in program")
+
+# updated_comments = Counter("updated_comments", "comment updated in program")
+app_state = Enum('app_state', 'Information about service state',
+                 states=['running', 'waiting_for_quota'])
+
+BUCKETS_FOR_WAITING_FOR_QUOTA = (.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 45.0, 60.0, 150.0, 300.0,
+                                 450.0, 600.0, 900.0, 1800.0, 3600.0, 9000.0, 24*3600.0, 2*24*3600.0, float("inf"))
+
+replies_process = Histogram(
+    "replies_process_time", "processing time in seconds[s]", ['type'], buckets=BUCKETS_FOR_WAITING_FOR_QUOTA)
+process_message_time = replies_process.labels(type='message')
+process_update_time = replies_process.labels(type='update')
+
+BUCKETS_FOR_COMMENTS_COUNTS = (
+    1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0, 250.0, 500.0, 750.0, float("inf"))
+youtube_fetching_counts = Histogram(
+    "youtube_fetching_counts", "counts of replies fetched by youtube per parent", buckets=BUCKETS_FOR_COMMENTS_COUNTS)
+
+BUCKETS_FOR_DATABASE_IO = (.1, .25, .5, .75,
+                           1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 45.0, 60.0, 150.0, 300.0, 450.0, 600.0, 900.0, 1800.0, 3600.0, float("inf"))
+
+replies_io_time = Histogram(
+    "replies_io_time", "io time in seconds[s]", ["operation"], buckets=BUCKETS_FOR_DATABASE_IO)
+youtube_fetching_time = replies_io_time.labels(operation='youtube_fetching')
+neo4j_insert_time = replies_io_time.labels(operation='neo4j_insert')
+postgres_fetching_time = replies_io_time.labels(operation='postgres_fetching')
+postgres_insert_time = replies_io_time.labels(operation='postgres_insert')
+
+configuration = Info('microservice_configuration', 'frequency of updates')
+
 
 async def kafka_callback(consumer: AIOKafkaConsumer, callback: Callable[[ConsumerRecord], Awaitable[None]]):
     # Consume messages
@@ -53,39 +99,54 @@ async def kafka_callback(consumer: AIOKafkaConsumer, callback: Callable[[Consume
 
 def process_messages(pool: asyncpg.Pool):
     async def f(c: ConsumerRecord):
-        parsed = parse_messages(c)
-        if len(parsed.replies) == 0:
-            return
-        update = datetime.now()
-        if parsed.total_replies > len(parsed.replies):
+        processed_messages.inc()
+        with process_message_time.time():
             try:
-                async for replies in get_new_chunk_iter(youtube_fetch_childrens(parsed.parent_id), 2):
-                    await push_to_neo4j(replies)
-            except InputError:
-                update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
-        else:
-            await push_to_neo4j(parsed.replies)
-        async with pool.acquire() as con:
-            await con.execute(queries.updated_insert_query, parsed.parent_id, update)
+                parsed = parse_messages(c)
+            except pickle.UnpicklingError:
+                log.warning("invalid kafka message with offset %d", c.offset)
+                unparsable_messages.inc()
+                return
+            if len(parsed.replies) == 0:
+                return
+            update = datetime.now()
+            if parsed.total_replies > len(parsed.replies):
+                try:
+                    async for replies in get_new_chunk_iter(youtube_fetch_childrens(parsed.parent_id), 2):
+                        await push_to_neo4j(replies)
+                except InputError:
+                    update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
+            else:
+                await push_to_neo4j(parsed.replies)
+            with postgres_insert_time.time():
+                async with pool.acquire() as con:
+                    await con.execute(queries.updated_insert_query, parsed.parent_id, update)
+
     return f
 
 
 def process_update(pool: asyncpg.Pool, frequency: int):
     async def f(_: ConsumerRecord):
+        update_events.inc()
         log.info("Update triggered")
-        if frequency <= 0:
-            return
-        async with pool.acquire() as con:
-            values = await con.fetch(queries.to_update_query, datetime.now() - timedelta(days=frequency))
-        for parent_id in values:
-            update = datetime.now()
-            try:
-                async for replies in get_new_chunk_iter(youtube_fetch_childrens(parent_id), 2):
-                    await push_to_neo4j(replies)
-            except InputError:
-                update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
-            async with pool.acquire() as con:
-                await con.execute(queries.updated_insert_query, parent_id, update)
+        with process_update_time.time():
+            if frequency <= 0:
+                return
+            with postgres_fetching_time.time():
+                async with pool.acquire() as con:
+                    values = [CommentId(i[0]) for i in await con.fetch(queries.to_update_query, datetime.now() - timedelta(days=frequency))]
+            inprogress_update.set(len(values))
+            for parent_id in values:
+                update = datetime.now()
+                try:
+                    async for replies in get_new_chunk_iter(youtube_fetch_childrens(parent_id), 2):
+                        await push_to_neo4j(replies)
+                except InputError:
+                    update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
+                with postgres_insert_time.time():
+                    async with pool.acquire() as con:
+                        await con.execute(queries.updated_insert_query, parent_id, update)
+                inprogress_update.dec()
     return f
 
 
@@ -109,8 +170,9 @@ async def push_to_neo4j(comments: 'list[Reply]'):
         return
     log.info("neo4j will save %d comments", len(comments))
     neo4j = await get_neo4j()  # type: ignore
-    await neo4j_blocking_query(neo4j, queries.all_comment_query,  # type: ignore
-                               comments)
+    with neo4j_insert_time.time():
+        await neo4j_blocking_query(neo4j, queries.all_comment_query,  # type: ignore
+                                   comments)
     await close_neo4j(neo4j)  # type: ignore
 
 
@@ -129,7 +191,9 @@ async def timeout_to_quota_reset():
     next_update = same_day_update if now.hour < 10 else next_day_update
     delta = (datetime.now()-next_update)
     log.warning("youtube fetch failed and is waiting for %s", delta)
+    app_state.state('waiting_for_quota')
     await asyncio.sleep(delta.total_seconds())
+    app_state.state('running')
 
 
 async def youtube_fetch_childrens(parent_id: CommentId):
@@ -139,27 +203,36 @@ async def youtube_fetch_childrens(parent_id: CommentId):
             part="snippet,id", parentId=parent_id, maxResults=YOUTUBE_COMMENTS_THREAD_CHUNK)  # type: ignore
         while True:
             try:
+                _start = default_timer()
+                _total_duration = 0.
                 full_res = await aiogoogle.as_api_key(req, full_res=True)
                 page_number = 0
+                rejected = []
+                parsed = []
                 async for page in full_res:
+                    _total_duration += max(default_timer() - _start, 0)
+                    # duration
                     rejected = []
                     parsed: list[Reply] = []
                     for item in page['items']:
+                        quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
                         try:
                             parsed.append(from_json(item))
                         except KeyError:
                             rejected.append(item)
                     if len(rejected) > 0:
+                        rejected_comments.inc(len(rejected))
                         with open(f'./rejected/replies-{datetime.now()}.json', 'w') as f:
                             json.dump(rejected, f)
                     yield parsed
                     page_number += 1
-                    if page_number % 10 == 0:
-                        log.info("Fetching many responses %d",
-                                 page_number*YOUTUBE_COMMENTS_THREAD_CHUNK)
-                # precisely (page_number-1)*YOUTUBE_COMMENTS_THREAD_CHUNK + len(rejected) + len(parsed)
-                log.debug("Fetched from youtube around %d comments",
-                          page_number*YOUTUBE_COMMENTS_THREAD_CHUNK)
+                    youtube_fetching_counts.observe(
+                        (page_number-1)*YOUTUBE_COMMENTS_THREAD_CHUNK + len(rejected) + len(parsed))
+                    # start new timer
+                    _start = default_timer()
+
+                # insert new final time
+                youtube_fetching_time.observe(_total_duration)
                 break
             except HTTPError as err:
                 if err.res.status_code == 404 and err.res.content['error']['errors'][0]['reason'] == "commentNotFound":
@@ -172,6 +245,8 @@ async def youtube_fetch_childrens(parent_id: CommentId):
 
 
 async def main(data: RepliesConfig):
+    start_http_server(8000)
+    configuration.info({'update_frequency': str(data.update_frequency)})
     log.info("update frequency: %d", data.update_frequency)
     replyConsumer = AIOKafkaConsumer(
         'comment_replies',

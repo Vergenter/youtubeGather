@@ -3,3 +3,4 @@ aiokafka==0.7.1
 asyncpg==0.24.0
 aiogoogle==2.1.0
 neo4j==4.3.4
+prometheus-client==0.11.0
