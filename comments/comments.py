@@ -133,7 +133,7 @@ async def process_video_id(video_id: VideoId, pool: asyncpg.Pool, producer: AIOK
 def process_message_bulk(pool: asyncpg.Pool, producer: AIOKafkaProducer):
     processing = process_message(pool, producer)
 
-    async def f(c: list[ConsumerRecord]):
+    async def f(c: 'list[ConsumerRecord]'):
         await asyncio.gather(*[processing(cr)for cr in c])
     return f
 
@@ -213,13 +213,13 @@ async def youtube_fetch_childrens(video_id: VideoId):
                 youtube_fetching_time.observe(_total_duration)
                 break
             except HTTPError as err:
-                if err.res.status_code == 404 or err.res.content['error']['errors'][0]['reason'] == "videoNotFound":
-                    log.warning("Incorrect video_id")
+                if err.res.status_code == 404 and err.res.content['error']['errors'][0]['reason'] == "videoNotFound":
+                    log.warning("Incorrect video_id %s",video_id)
                     raise InputError(video_id, "Video id is incorrect")
-                elif err.res.status_code == 403 or err.res.content['error']['errors'][0]['reason'] == "commentsDisabled":
-                    log.warning("Comments disabled")
+                elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "commentsDisabled":
+                    log.warning("Comments disabled %s",video_id)
                     raise InputError(video_id, "Comments disabled")
-                elif err.res.status_code == 403 or err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
+                elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
                     await timeout_to_quota_reset()
                 raise
 
@@ -231,7 +231,7 @@ async def timeout_to_quota_reset():
     next_day_update = datetime(
         year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
     next_update = same_day_update if now.hour < 10 else next_day_update
-    delta = (datetime.now()-next_update)
+    delta = (next_update-datetime.now())
     log.warning("youtube fetch failed and is waiting for %s", delta)
     app_state.state('waiting_for_quota')
     await asyncio.sleep(delta.total_seconds())

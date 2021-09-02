@@ -98,7 +98,7 @@ async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
                 result = await aiogoogle.as_api_key(req)
                 break
             except HTTPError as err:
-                if err.res.status_code != 403 or err.res.content['error']['errors'][0]['reason'] != "quotaExceeded":
+                if err.res.status_code != 403 and err.res.content['error']['errors'][0]['reason'] != "quotaExceeded":
                     raise
                 now = datetime.now()
                 same_day_update = datetime(

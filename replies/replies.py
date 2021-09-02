@@ -174,7 +174,7 @@ async def timeout_to_quota_reset():
     next_day_update = datetime(
         year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
     next_update = same_day_update if now.hour < 10 else next_day_update
-    delta = (datetime.now()-next_update)
+    delta = (next_update-datetime.now())
     log.warning("youtube fetch failed and is waiting for %s", delta)
     app_state.state('waiting_for_quota')
     await asyncio.sleep(delta.total_seconds())
