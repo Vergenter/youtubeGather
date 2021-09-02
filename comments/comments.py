@@ -131,10 +131,15 @@ async def process_video_id(video_id: VideoId, pool: asyncpg.Pool, producer: AIOK
 
 
 def process_message_bulk(pool: asyncpg.Pool, producer: AIOKafkaProducer):
-    processing = process_message(pool, producer)
-
-    async def f(c: 'list[ConsumerRecord]'):
-        await asyncio.gather(*[processing(cr)for cr in c])
+    async def f(messages: 'list[ConsumerRecord]'):
+        process_messages.inc(len(messages))
+        with process_message_time.time():
+            video_ids = [parse_messages(c) for c in messages]
+            with postgres_fetching_unique_time.time():
+                async with pool.acquire() as con:
+                    unique = {VideoId(i["id"]) for i in await con.fetch(queries.new_videos_query, video_ids)}
+            repeats_messages.inc(len(messages)-len(unique))
+            await asyncio.gather(*[process_video_id(cr, pool, producer)for cr in unique])
     return f
 
 
@@ -214,10 +219,10 @@ async def youtube_fetch_childrens(video_id: VideoId):
                 break
             except HTTPError as err:
                 if err.res.status_code == 404 and err.res.content['error']['errors'][0]['reason'] == "videoNotFound":
-                    log.warning("Incorrect video_id %s",video_id)
+                    log.warning("Incorrect video_id %s", video_id)
                     raise InputError(video_id, "Video id is incorrect")
                 elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "commentsDisabled":
-                    log.warning("Comments disabled %s",video_id)
+                    log.warning("Comments disabled %s", video_id)
                     raise InputError(video_id, "Comments disabled")
                 elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
                     await timeout_to_quota_reset()
