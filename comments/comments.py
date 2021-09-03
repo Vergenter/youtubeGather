@@ -46,25 +46,24 @@ app_state = Enum('app_state', 'Information about service state',
 BUCKETS_FOR_DATABASE_IO = (.1, .25, .5, .75,
                            1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 45.0, 60.0, 150.0, 300.0, 450.0, 600.0, 900.0, 1800.0, 3600.0, float("inf"))
 
-replies_io_time = Histogram(
-    "replies_io_time", "io time in seconds[s]", ["operation"], buckets=BUCKETS_FOR_DATABASE_IO)
-youtube_fetching_time = replies_io_time.labels(operation='youtube_fetching')
-neo4j_insert_time = replies_io_time.labels(operation='neo4j_insert')
-kafka_produce_time = replies_io_time.labels(operation='kafka_produce')
-postgres_fetching_unique_time = replies_io_time.labels(
+comments_io_time = Histogram(
+    "comments_io_time", "io time in seconds[s]", ["operation"], buckets=BUCKETS_FOR_DATABASE_IO)
+youtube_fetching_time = comments_io_time.labels(operation='youtube_fetching')
+neo4j_insert_time = comments_io_time.labels(operation='neo4j_insert')
+kafka_produce_time = comments_io_time.labels(operation='kafka_produce')
+postgres_fetching_unique_time = comments_io_time.labels(
     operation='postgres_fetching_unique')
-postgres_fetching_time = replies_io_time.labels(operation='postgres_fetching')
-postgres_insert_time = replies_io_time.labels(operation='postgres_insert')
+postgres_fetching_time = comments_io_time.labels(operation='postgres_fetching')
+postgres_insert_time = comments_io_time.labels(operation='postgres_insert')
 
 comments_messages_total = Counter(
     'comments_videos_total', "messages processed from new_videos kafka topic", ['state'])
 rejected_messages = comments_messages_total.labels(state='rejected')
 repeats_messages = comments_messages_total.labels(state='repeats')
 process_messages = comments_messages_total.labels(state='process')
-emited_messages = comments_messages_total.labels(state='emited')
 
-insufficient_comments = Counter(
-    "insufficient_comments", "comments without channel id")
+emited_messages = Counter(
+    "replies_emited_messages", "replies emited to comment_replies kafka topic")
 update_events = Counter("update_events", "updates triggered in program")
 quota_usage = Counter("quota_usage", "usage of quota in replies module")
 
@@ -201,9 +200,6 @@ async def youtube_fetch_childrens(video_id: VideoId):
                         except KeyError:
                             rejected.append(item)
                             rejected_messages.inc()
-                        except JsonError as err:
-                            log.info("Comment without author %s", err.argument)
-                            insufficient_comments.inc()
                     if len(rejected) > 0:
                         with open(f'./rejected/comments-{datetime.now()}.json', 'w') as f:
                             json.dump(rejected, f)
@@ -226,17 +222,18 @@ async def youtube_fetch_childrens(video_id: VideoId):
                     raise InputError(video_id, "Comments disabled")
                 elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
                     await timeout_to_quota_reset()
-                raise
+                else:
+                    raise
 
 
 async def timeout_to_quota_reset():
+    TIME_DRIFT = timedelta(minutes=1)
     now = datetime.now()
     same_day_update = datetime(
-        year=now.year, month=now.month, day=now.day, hour=10)
-    next_day_update = datetime(
-        year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
+        year=now.year, month=now.month, day=now.day, hour=7)
+    next_day_update = same_day_update+timedelta(days=1)
     next_update = same_day_update if now.hour < 10 else next_day_update
-    delta = (next_update-datetime.now())
+    delta = (next_update-datetime.now())+TIME_DRIFT
     log.warning("youtube fetch failed and is waiting for %s", delta)
     app_state.state('waiting_for_quota')
     await asyncio.sleep(delta.total_seconds())

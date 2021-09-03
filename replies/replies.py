@@ -168,13 +168,13 @@ def parse_messages(message):
 
 
 async def timeout_to_quota_reset():
+    TIME_DRIFT = timedelta(minutes=1)
     now = datetime.now()
     same_day_update = datetime(
-        year=now.year, month=now.month, day=now.day, hour=10)
-    next_day_update = datetime(
-        year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
+        year=now.year, month=now.month, day=now.day, hour=7)
+    next_day_update = same_day_update+timedelta(days=1)
     next_update = same_day_update if now.hour < 10 else next_day_update
-    delta = (next_update-datetime.now())
+    delta = (next_update-datetime.now())+TIME_DRIFT
     log.warning("youtube fetch failed and is waiting for %s", delta)
     app_state.state('waiting_for_quota')
     await asyncio.sleep(delta.total_seconds())

@@ -4,8 +4,11 @@ all_comment_query = '''
 UNWIND $rows AS row
 with row
 MERGE (comment:Comment{commentId: row.reply_id})
-MERGE (channel:Channel{channelId: row.authorChannelId})
-MERGE (comment)-[:OWNED_BY]->(channel)
+with row,comment
+FOREACH(ignoreMe IN CASE WHEN row.authorChannelId IS NOT NULL THEN [1] ELSE [] END |
+    MERGE (channel:Channel{channelId: row.authorChannelId})
+    MERGE (comment)-[:OWNED_BY]->(channel)
+)
 with row,comment
 MERGE (parent:Comment{commentId: row.parentId})
 MERGE (comment)-[:To]->(parent)

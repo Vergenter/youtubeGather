@@ -1,4 +1,4 @@
-from json_error import JsonError
+from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime
 from utils.types import ChannelId, CommentId, ReplyId, VideoId
@@ -25,8 +25,8 @@ def comment_from_json(snippet):
         video_id=VideoId(snippet["videoId"]),
         textOriginal=snippet["topLevelComment"]["snippet"]["textOriginal"],
         authorDisplayName=snippet["topLevelComment"]["snippet"]["authorDisplayName"],
-        authorChannelId=ChannelId(
-            snippet["topLevelComment"]["snippet"]["authorChannelId"]["value"]),
+        authorChannelId=(channel_id := snippet["topLevelComment"]["snippet"].get(
+            "authorChannelId", {}).get("value")) and ChannelId(channel_id),
         likeCount=snippet["topLevelComment"]["snippet"]["likeCount"],
         publishedAt=snippet["topLevelComment"]["snippet"]["publishedAt"],
         updatedAt=snippet["topLevelComment"]["snippet"]["updatedAt"],
@@ -51,16 +51,14 @@ class Reply:
 
 
 def reply_from_json(reply):
-    if not reply["snippet"].get("authorChannelId"):
-        raise JsonError(reply["id"], "No channel Id")
     return Reply(
         reply_id=ReplyId(reply["id"]),
         video_id=VideoId(reply["snippet"]["videoId"]),
         textOriginal=reply["snippet"]["textOriginal"],
         parentId=CommentId(reply["snippet"]["parentId"]),
         authorDisplayName=reply["snippet"]["authorDisplayName"],
-        authorChannelId=ChannelId(
-            reply["snippet"]["authorChannelId"]["value"]),
+        authorChannelId=(channel_id := reply["snippet"].get(
+            "authorChannelId", {}).get("value")) and ChannelId(channel_id),
         likeCount=reply["snippet"]["likeCount"],
         publishedAt=reply["snippet"]["publishedAt"],
         updatedAt=reply["snippet"]["updatedAt"],
