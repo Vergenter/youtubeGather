@@ -8,3 +8,4 @@ src/logs
 client_secret.json
 .venv
 *database.ini
+docker-compose.override.yaml
