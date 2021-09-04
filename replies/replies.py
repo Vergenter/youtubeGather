@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from functools import reduce
 import json
+from re import A
 from typing import Awaitable, Callable
 
 from aiokafka.structs import ConsumerRecord
@@ -31,15 +32,14 @@ import yaml
 import asyncio
 import pickle
 from timeit import default_timer
-
 YOUTUBE_FETCH_QUOTA_COST = 1
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 YOUTUBE_COMMENTS_THREAD_CHUNK = 100
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
-dbname = os.environ['POSTGRES_DBNAME']
-user = os.environ['POSTGRES_USER']
-password = os.environ['POSTGRES_PASSWORD']
-host = os.environ['POSTGRES_HOST']
+DBNAME = os.environ['POSTGRES_DBNAME']
+USER = os.environ['POSTGRES_USER']
+PASSWORD = os.environ['POSTGRES_PASSWORD']
+HOST = os.environ['POSTGRES_HOST']
 LOGGER_NAME = "REPLIES"
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 log = logging.getLogger(LOGGER_NAME)
@@ -86,6 +86,8 @@ youtube_fetching_time = replies_io_time.labels(operation='youtube_fetching')
 neo4j_insert_time = replies_io_time.labels(operation='neo4j_insert')
 postgres_fetching_time = replies_io_time.labels(operation='postgres_fetching')
 postgres_insert_time = replies_io_time.labels(operation='postgres_insert')
+postgres_fetching_unique_time = replies_io_time.labels(
+    operation='postgres_fetching_unique')
 
 configuration = Info('microservice_configuration', 'frequency of updates')
 
@@ -97,32 +99,64 @@ async def kafka_callback(consumer: AIOKafkaConsumer, callback: Callable[[Consume
         await consumer.commit()
 
 
-def process_messages(pool: asyncpg.Pool):
-    async def f(c: ConsumerRecord):
-        processed_messages.inc()
-        with process_message_time.time():
-            try:
-                parsed = parse_messages(c)
-            except pickle.UnpicklingError:
-                log.warning("invalid kafka message with offset %d", c.offset)
-                unparsable_messages.inc()
-                return
-            if len(parsed.replies) == 0:
-                return
-            update = datetime.now()
-            if parsed.total_replies > len(parsed.replies):
-                try:
-                    async for replies in get_new_chunk_iter(youtube_fetch_childrens(parsed.parent_id), 2):
-                        await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in replies])
-                except InputError:
-                    update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
-            else:
-                await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in parsed.replies])
-            with postgres_insert_time.time():
-                async with pool.acquire() as con:
-                    await con.execute(queries.updated_insert_query, parsed.parent_id, update)
+async def kafka_callback_bulk(bulk_size: int, consumer: AIOKafkaConsumer, callback: Callable[[list[ConsumerRecord]], Awaitable[None]]):
+    # Consume messages
+    while True:
+        result = await consumer.getmany(timeout_ms=10 * 1000, max_records=bulk_size)
+        for tp, messages in result.items():
+            if messages:
+                await callback(messages)
+                # Commit progress only for this partition
+                await consumer.commit({tp: messages[-1].offset + 1})
 
+
+def process_message_bulk(pool: asyncpg.Pool):
+    async def f(messages: 'list[ConsumerRecord]'):
+        processed_messages.inc(len(messages))
+        with process_message_time.time():
+            parent_messages: list[ParentMessage] = [parsed for parsed in (
+                parse_messages(c) for c in messages) if parsed is not None and len(parsed.replies) != 0]
+            # this will repeat queries on repeated parent_id
+            potentialy_new_parent_messages = {
+                parent_message.parent_id: parent_message for parent_message in parent_messages if parent_message.total_replies > 5}
+            # this can repeat parent_id if update date is different
+            potentialy_new_full_updates = {
+                (parent_message.parent_id, parent_message.replies[0].update): parent_message for parent_message in parent_messages if parent_message.total_replies < 6}
+            is_full_updates, new_parent_messages_ids_unparsed = [], []
+            with postgres_fetching_unique_time.time():
+                if not potentialy_new_parent_messages:
+                    is_full_updates = await asyncio.gather(*[pool.fetchval(queries.parent_update_exist_query, args[0], args[1]) for args in potentialy_new_full_updates.keys()])
+                    new_parent_messages_ids_unparsed = []
+                else:
+                    new_parent_messages_ids_unparsed, *is_full_updates = await asyncio.gather(pool.fetch(queries.new_parent_query, potentialy_new_parent_messages.keys()),
+                                                                                              *[pool.fetchval(queries.parent_update_exist_query, args[0], args[1]) for args in potentialy_new_full_updates.keys()])
+            new_parent_messages_ids = {
+                CommentId(p_id["parent_id"]) for p_id in new_parent_messages_ids_unparsed}
+            correct_keys = {x[0] for x in zip(
+                potentialy_new_full_updates.keys(), is_full_updates) if x[1]}
+            result = [v for k, v in potentialy_new_full_updates.items() if k in correct_keys] + \
+                [v for k, v in potentialy_new_parent_messages.items()
+                 if k in new_parent_messages_ids]
+
+            await asyncio.gather(*[process_parent_messages(pool, pm)for pm in result])
     return f
+
+
+async def process_parent_messages(pool: asyncpg.Pool, parent_message: ParentMessage):
+    update = datetime.now()
+    if parent_message.total_replies > len(parent_message.replies):
+        try:
+            async for replies in get_new_chunk_iter(youtube_fetch_childrens(parent_message.parent_id), 2):
+                await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in replies])
+        except InputError:
+            update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
+    else:
+        assert not not parent_message.replies, "parent_messages should have replies"
+        update = parent_message.replies[0].update
+        await push_to_neo4j(queries.all_comment_query, [asdict(reply) for reply in parent_message.replies])
+    with postgres_insert_time.time():
+        async with pool.acquire() as con:
+            await con.execute(queries.updated_insert_query, parent_message.parent_id, update)
 
 
 def process_update(pool: asyncpg.Pool, frequency: int):
@@ -163,7 +197,13 @@ def push_to_neo4j(query: str, items: 'list[dict]'):
 
 def parse_messages(message):
     key = message.key.decode("utf-8")
-    value = pickle.loads(message.value)
+    try:
+        value = pickle.loads(message.value)
+    except pickle.UnpicklingError:
+        log.warning("invalid kafka message with offset %d and key %s",
+                    message.offset, key)
+        unparsable_messages.inc()
+        return None
     return ParentMessage(key, value[0], list(map(from_dict, value[1])))
 
 
@@ -248,13 +288,12 @@ async def main(data: RepliesConfig):
         group_id="replyModule"
     )
     postgres_pool = asyncpg.create_pool(
-        user=user, password=password, database=dbname, host=host, min_size=2)
+        user=USER, password=PASSWORD, database=DBNAME, host=HOST, min_size=2)
     _, _, pool = await asyncio.gather(updateConsumer.start(), replyConsumer.start(), postgres_pool)
     if not pool:
         raise NotImplementedError("no connctions")
     try:
-
-        a1 = kafka_callback(replyConsumer, process_messages(pool))
+        a1 = kafka_callback_bulk(10, replyConsumer, process_message_bulk(pool))
         a2 = kafka_callback(updateConsumer, process_update(
             pool, data.update_frequency))
         await asyncio.gather(a1, a2)

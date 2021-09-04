@@ -21,7 +21,7 @@ class Reply:
 class ParentMessage:
     parent_id: CommentId
     total_replies: int
-    replies: list[Reply]
+    replies: 'list[Reply]'
 
 
 def from_dict(data: dict):

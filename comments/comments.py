@@ -1,4 +1,3 @@
-from json_error import JsonError
 from timeit import default_timer
 from utils.slice import chunked
 from typing import Awaitable, Callable
@@ -31,10 +30,10 @@ YOUTUBE_FETCH_QUOTA_COST = 1
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
 YOUTUBE_COMMENTS_THREAD_CHUNK = 100
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
-dbname = os.environ['POSTGRES_DBNAME']
-user = os.environ['POSTGRES_USER']
-password = os.environ['POSTGRES_PASSWORD']
-host = os.environ['POSTGRES_HOST']
+DBNAME = os.environ['POSTGRES_DBNAME']
+USER = os.environ['POSTGRES_USER']
+PASSWORD = os.environ['POSTGRES_PASSWORD']
+HOST = os.environ['POSTGRES_HOST']
 LOGGER_NAME = "COMMENTS"
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
 log = logging.getLogger(LOGGER_NAME)
@@ -268,7 +267,7 @@ async def main(data: CommentsConfig):
         bootstrap_servers='kafka:9092',
         enable_auto_commit=False,      # Will disable autocommit
         auto_offset_reset="earliest",  # If committed offset not found, start from beginning
-        group_id="commentModule"
+        group_id="comment2Module"
     )
     updateConsumer = AIOKafkaConsumer(
         'updates',
@@ -279,7 +278,7 @@ async def main(data: CommentsConfig):
     )
     producer = AIOKafkaProducer(bootstrap_servers='kafka:9092')
     postgres_pool = asyncpg.create_pool(
-        user=user, password=password, database=dbname, host=host, min_size=2)
+        user=USER, password=PASSWORD, database=DBNAME, host=HOST, min_size=2)
     _, _, pool, _ = await asyncio.gather(videosConsumer.start(), updateConsumer.start(), postgres_pool, producer.start())
     if not pool:
         raise NotImplementedError("no connctions")
