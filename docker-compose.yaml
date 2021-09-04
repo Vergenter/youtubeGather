@@ -10,6 +10,17 @@ services:
       kafka:
         condition: service_healthy
 
+  quota:
+    build:
+      context: quota
+      target: production
+    # ports:
+    #   - 5678:5678 # debugger port only if target: debug
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+
   channels:
     build:
       context: channels
