@@ -14,7 +14,7 @@ from utils.sync_to_async import run_in_executor
 from datetime import datetime, timedelta
 import queries
 from aiogoogle.client import Aiogoogle
-from utils.chunk_gen import get_new_chunk_queue
+from utils.chunk import get_new_chunk_queue
 from kafka.structs import TopicPartition
 import yaml
 from aiokafka import AIOKafkaConsumer

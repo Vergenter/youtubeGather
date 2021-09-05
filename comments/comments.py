@@ -1,5 +1,4 @@
 from timeit import default_timer
-from utils.slice import chunked
 from typing import Awaitable, Callable
 from input_error import InputError
 import pickle
@@ -13,7 +12,7 @@ import os
 
 from aiogoogle.client import Aiogoogle
 from aiogoogle.excs import HTTPError
-from utils.chunk_gen import get_new_chunk_iter, get_new_chunk_queue
+from utils.chunk import get_new_chunk_iter, chunked
 import queries
 from aiokafka.consumer.consumer import AIOKafkaConsumer
 import asyncpg

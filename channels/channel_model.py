@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
-import shlex
 from dataclasses import dataclass
 from utils.types import ChannelId, PlaylistId
 
@@ -71,3 +70,7 @@ def from_json(json: Any):
             "moderateComments", False),
         update=datetime.now()
     )
+
+
+def get_empty_channel(channelId: ChannelId):
+    return {"channelId": channelId, "public": False, "update": datetime.now()}

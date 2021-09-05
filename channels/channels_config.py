@@ -2,9 +2,13 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class ChannelsConfig:
-    update_frequency: int = 0
+class Config:
+    update_frequency_h: float
+    quota_per_update_limit: int
 
 
 def from_yaml(config):
-    return ChannelsConfig(update_frequency=config.get("update_frequency", 0))
+    return Config(
+        update_frequency_h=config.get("update_frequency_h", 0),
+        quota_per_update_limit=config.get("quota_per_update_limit", 0)
+    )

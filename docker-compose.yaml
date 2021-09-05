@@ -25,6 +25,8 @@ services:
     build:
       context: channels
       target: production
+    expose:
+      - 8000 # metrics
     # ports:
     #   - 5678:5678 # debugger port only if target: debug
     environment:
@@ -49,6 +51,7 @@ services:
       target: production
     expose:
       - 8000 # metrics
+    # ports:
     #   - 5678:5678 # debugger port only if target: debug
     environment:
       - POSTGRES_DBNAME=commentdb
@@ -200,8 +203,24 @@ services:
       - NEO4J_dbms_memory_heap_initial__size=2G
   prometheus:
     image: prom/prometheus:latest
+    command: 
+      - '--enable-feature=promql-negative-offset'
+      - '--enable-feature=promql-at-modifier'
+      - '--config.file=/prometheus/prometheus.yml'
     ports:
       - 9090:9090
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/prometheus/prometheus.yml
       - ~/images/prometheus:/prometheus
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    links:
+      - prometheus:prometheus
+    volumes:
+      - ~/images/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false

@@ -1,218 +1,276 @@
-import logging
-from dataclasses import asdict
-import json
-
-from aiogoogle.excs import HTTPError
-from utils.connection import Neo4jConnection
-from utils.sync_to_async import run_in_executor
-from channel_model import Channel, from_json
-from datetime import datetime, timedelta
-import queries
-from aiogoogle.client import Aiogoogle
-from utils.chunk_gen import get_new_chunk_queue
-from kafka.structs import TopicPartition
-from channels_config import ChannelsConfig, from_yaml
-import yaml
-from aiokafka import AIOKafkaConsumer
 import asyncio
+from utils.times import BUCKETS_FOR_DATABASE_IO, BUCKETS_FOR_WAITING_FOR_QUOTA
+
+import yaml
+from channels_config import Config, from_yaml
+from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass
+import json
+import os
+from typing import Any, Awaitable, Callable, Coroutine, Tuple, Union
+from utils.sync_to_async import run_in_executor
+from prometheus_client import Counter, Gauge, start_http_server, Histogram, Enum, Info
+
+from aiogoogle.client import Aiogoogle
+from aiogoogle.excs import HTTPError
+from utils.chunk import chunked
+from channel_model import Channel, from_json, get_empty_channel
+from neo4j import BoltDriver, GraphDatabase, Neo4jDriver
 from utils.types import ChannelId
 import asyncpg
-import os
-from operator import attrgetter
+from aiokafka.consumer.consumer import AIOKafkaConsumer
+from aiokafka.structs import ConsumerRecord
+from aiokafka.errors import CommitFailedError
+import queries
+from quota_error import QuotaError
+import logging
 
+NEO4J = Union[BoltDriver, Neo4jDriver]
 LOGGER_NAME = "CHANNELS"
-logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+                    level=os.environ.get("LOGLEVEL", "INFO"), datefmt='%Y-%m-%d %H:%M:%S')
 log = logging.getLogger(LOGGER_NAME)
 
+DBNAME = os.environ['POSTGRES_DBNAME']
+USER = os.environ['POSTGRES_USER']
+PASSWORD = os.environ['POSTGRES_PASSWORD']
+HOST = os.environ['POSTGRES_HOST']
+NEO4J_BOLT_URL = os.environ["NEO4J_BOLT_URL"]
+NEO4J_USERNAME = os.environ["NEO4J_USERNAME"]
+NEO4J_PASSWORD = os.environ["NEO4J_PASSWORD"]
 TIMEDELTA_WRONG_DATA_UPDATE = timedelta(weeks=52*1000)
+NEW_DATA = datetime.min
 DEVELOPER_KEY = os.environ['YOUTUBE_API_KEY_V3']
 YOUTUBE_CHANNELS_MAX_CHUNK = 50
-dbname = os.environ['POSTGRES_DBNAME']
-user = os.environ['POSTGRES_USER']
-password = os.environ['POSTGRES_PASSWORD']
-host = os.environ['POSTGRES_HOST']
+YOUTUBE_CHANNELS_PART = "brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails"
+YOUTUBE_FETCH_QUOTA_COST = 1
+
+configuration = Info('microservice_configuration',
+                     'frequency of updates and quota usage')
+app_state = Enum('app_state', 'Information about service state',
+                 states=['running', 'waiting_for_quota'])
+
+channels_io_time = Histogram(
+    "channels_io_time", "io time in seconds[s]", ["operation"], buckets=BUCKETS_FOR_DATABASE_IO)
+youtube_fetching_time = channels_io_time.labels(operation='youtube_fetching')
+neo4j_insert_time = channels_io_time.labels(operation='neo4j_insert')
+postgres_inserting_new_time = channels_io_time.labels(
+    operation='postgres_inserting_new')
+postgres_fetching_time = channels_io_time.labels(operation='postgres_fetching')
+postgres_insert_time = channels_io_time.labels(operation='postgres_insert')
+
+channels_messages_total = Counter(
+    'channels_messages_total', "messages processed from new_channels kafka topic", ['state'])
+rejected_messages = channels_messages_total.labels(state='rejected')
+process_messages = channels_messages_total.labels(state='process')
+
+update_events = Counter("channels_update_events",
+                        "updates triggered in program")
+quota_usage = Counter("quota_usage", "usage of quota in replies module")
+wrong_channels = Counter("channels_wrong_channels",
+                         "channels that are wrong or don't exists")
+inserted_neo4j = Counter("channels_inserted_neo4j",
+                         "channels inserted to neo4j database")
+process_update_time = Histogram(
+    "channels_process_time", "processing time in seconds[s]", buckets=BUCKETS_FOR_WAITING_FOR_QUOTA)
+
+inprogress_update = Gauge('channels_inprogress_updates',
+                          'inprogress comment_id to fetch childrens')
 
 
-async def kafka_produce(consumer: AIOKafkaConsumer, queue: asyncio.Queue):
+async def kafka_callback_bulk(bulk_size: int, consumer: AIOKafkaConsumer, callback: Callable[[list[ConsumerRecord]], Awaitable[None]]):
     # Consume messages
-    async for msg in consumer:
-        msg.value = msg.value.decode("utf-8")
-        await queue.put(msg)
+    while True:
+        result = await consumer.getmany(timeout_ms=10 * 1000, max_records=bulk_size)
+        for tp, messages in result.items():
+            if messages:
+                await callback(messages)
+                # Commit progress only for this partition
+                try:
+                    await consumer.commit({tp: messages[-1].offset + 1})
+                except CommitFailedError:
+                    pass
 
 
-async def kafka_commit(consumer: AIOKafkaConsumer, msg):
-    tp = TopicPartition(msg.topic, msg.partition)
-    log.debug("kafka commit new offset %s", msg.offset+1)
-    await consumer.commit({tp: msg.offset+1})
+def parse_messages(message):
+    return ChannelId(message.key)
 
 
-async def kafka_commit_from_messages(consumer, values, messages):
-    try:
-        first_new_index = next(index for index, x in enumerate(
-            messages) if x.value in values)
-        if first_new_index > 0:
-            await kafka_commit(consumer, messages[first_new_index-1])
-        return False
-    except StopIteration:
-        await kafka_commit(consumer, messages[-1])
-        return True
+def process_channel_messages(pool: asyncpg.Pool):
+    add_update = queries.to_update(NEW_DATA)
+
+    async def f(messages: 'list[ConsumerRecord]'):
+        process_messages.inc(len(messages))
+        channel_ids = {parse_messages(c) for c in messages}
+        with postgres_inserting_new_time.time():
+            await pool.executemany(queries.update_insert_query2, [add_update(x) for x in channel_ids])
+    return f
 
 
-async def process_filter(consumer: AIOKafkaConsumer, pool: asyncpg.Pool, inQueue: asyncio.Queue, outQueue: asyncio.Queue, new_channels: 'set[ChannelId]'):
-    """new_channels parameter to provide new channel only once to outQueue"""
-    kafka_commit = True
-    async for messages in get_new_chunk_queue(inQueue, 5, 1000):
-        if len(messages) > 0:
-            async with pool.acquire() as con:
-                # need to parse args to ids
-                values = {ChannelId(i["id"]) for i in await con.fetch(queries.new_channel_query, list(map(ChannelId, map(attrgetter("value"), messages))))}
-                if kafka_commit:
-                    kafka_commit = await kafka_commit_from_messages(consumer, values, messages)
-                log.debug("From kafka got %d new channels", len(values))
-                for value in values:
-                    if value not in new_channels:
-                        new_channels.add(value)
-                        await outQueue.put(value)
+async def update_trigger(frequency_h: float, callback: Callable[[], Awaitable[None]]):
+    update_delta = timedelta(hours=frequency_h)
+    while True:
+        await asyncio.gather(callback(), asyncio.sleep(update_delta.total_seconds()))
 
 
-async def process_update(pool: asyncpg.Pool, frequency: int, inQueue: asyncio.Queue, outQueue: asyncio.Queue):
-    log.info("Update triggered")
-    if frequency > 0:
-        async for updates in get_new_chunk_queue(inQueue, 5):
-            if len(updates) > 0:
-                async with pool.acquire() as con:
-                    values = await con.fetch(queries.channel_update_query, datetime.now() - timedelta(days=frequency))
-                    for value in values:
-                        await outQueue.put(value)
-
-
-async def fetch_channels_from_yt(channels_ids: 'list[ChannelId]'):
+async def fetch_channels_from_yt(channels_ids: 'set[ChannelId]'):
+    result = []
     async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
-        youtube_api = await aiogoogle.discover('youtube', 'v3')
-        req = youtube_api.channels.list(
-            part="brandingSettings,contentDetails,contentOwnerDetails,id,localizations,snippet,statistics,status,topicDetails", id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US")  # type: ignore
-        parsed: list[Channel] = []
-        result = {"items": []}
-        while True:
+        with youtube_fetching_time.time():
+            youtube_api = await aiogoogle.discover('youtube', 'v3')
+            req = youtube_api.channels.list(
+                part=YOUTUBE_CHANNELS_PART, id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US")   # type: ignore
+            quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
             try:
                 result = await aiogoogle.as_api_key(req)
-                break
             except HTTPError as err:
-                if err.res.status_code != 403 and err.res.content['error']['errors'][0]['reason'] != "quotaExceeded":
-                    raise
-                now = datetime.now()
-                same_day_update = datetime(
-                    year=now.year, month=now.month, day=now.day, hour=10)
-                next_day_update = datetime(
-                    year=now.year, month=now.month, day=now.day, hour=10)+timedelta(days=1)
-                next_update = same_day_update if now.hour < 10 else next_day_update
-                delta = (datetime.now()-next_update)
-                log.warning(
-                    "youtube fetch failed %s and is waiting for %s", err.res, delta)
-                await asyncio.sleep(delta.total_seconds())
-
-        rejected = []
-        for item in result["items"]:
-            try:
-                parsed.append(from_json(item))
-            except (KeyError, ValueError):
-                rejected.append(item)
-        if len(rejected) > 0:
-            with open(f'./rejected/channels-{datetime.now()}.json', 'w') as f:
-                json.dump(rejected, f)
-        return parsed
+                if err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
+                    raise QuotaError
+                raise
+    parsed: list[Channel] = []
+    rejected = []
+    for item in result["items"]:
+        try:
+            parsed.append(from_json(item))
+        except KeyError:
+            rejected.append(item)
+            rejected_messages.inc()
+    if len(rejected) > 0:
+        with open(f'./rejected/channels-{datetime.now()}.json', 'w') as f:
+            json.dump(rejected, f)
+    return parsed
 
 
 @run_in_executor
-def neo4j_blocking_query(neo4j: Neo4jConnection, query: str, channels: 'list[Channel]'):
-    neo4j.bulk_insert_data(query, list(map(asdict, channels)))
+def neo4j_query(query: str, items: list[dict], neo4j: NEO4J):
+    with neo4j.session() as session:
+        session.run(query, {'rows': items})
+    inserted_neo4j.inc(len(items))
 
 
-@run_in_executor
-def get_neo4j():
-    return Neo4jConnection()
+async def process_channels_chunk(old_updates: list[Tuple[ChannelId, datetime]], pool: asyncpg.Pool, neo4j: NEO4J):
+    channel_ids = {i[0] for i in old_updates}
+    try:
+        channels = await fetch_channels_from_yt(channel_ids)
+    except QuotaError:
+        inprogress_update.dec(len(old_updates))
+        return True
+    fetched_channels_ids = {channel.channel_id for channel in channels}
+    wrong_new_channels = [a[0] for a in old_updates if a[1] ==
+                          NEW_DATA and a[0] not in fetched_channels_ids]
+    if wrong_new_channels:
+        log.warning("Incorrect channel_ids: %s", " ".join(wrong_new_channels))
+        wrong_channels.inc(len(wrong_new_channels))
+    ok_new_channels = {a[0] for a in old_updates if a[1] ==
+                       NEW_DATA and a[0] in fetched_channels_ids}
+    wrong_old_channels = {a[0] for a in old_updates if a[1] !=
+                          NEW_DATA and a[0] not in fetched_channels_ids}
+    tasks = []
+    if ok_new_channels:
+        parsed_channels = [asdict(
+            channel) for channel in channels if channel.channel_id in ok_new_channels]
+        tasks.append(neo4j_query(
+            queries.static_channel_query, parsed_channels, neo4j))
+    if wrong_old_channels:
+        parsed_channels = [get_empty_channel(
+            wrong_old_channel) for wrong_old_channel in wrong_old_channels]
+        tasks.append(neo4j_query(
+            queries.empty_channel_insert_query, parsed_channels, neo4j))
+    if channels:
+        parsed_channels = [asdict(channel) for channel in channels]
+        tasks.append(neo4j_query(
+            queries.dynamic_channel_query, parsed_channels, neo4j))
+    with neo4j_insert_time.time():
+        await asyncio.gather(*tasks)
+    id_to_update = queries.to_update(datetime.now())
+    id_not_to_update = queries.to_update(
+        datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE)
+    updates = [id_to_update(i) for i in (wrong_old_channels | fetched_channels_ids)]+[
+        id_not_to_update(i) for i in wrong_new_channels]
+    with postgres_insert_time.time():
+        await pool.executemany(queries.update_insert_query, updates)
+    inprogress_update.dec(len(old_updates))
+    return False
 
 
-@run_in_executor
-def close_neo4j(neo4j: Neo4jConnection):
-    neo4j.close()
+def parse_record(record) -> Tuple[ChannelId, datetime]:
+    return (ChannelId(record[0]), record[1])
 
 
-async def push_to_neo4j(channels: 'list[Channel]', new_channels: 'set[ChannelId]'):
-    if len(channels) == 0:
-        return
-    channels_to_create = [
-        channel for channel in channels if channel.channel_id in new_channels]
-    neo4j = await get_neo4j()
-    log.info("neo4j will save %d channels", len(channels))
-    if len(channels_to_create) > 0:
-        await asyncio.gather(neo4j_blocking_query(neo4j, queries.static_channel_query, channels_to_create),
-                             neo4j_blocking_query(neo4j, queries.dynamic_channel_query, channels_to_create))
-    else:
-        await neo4j_blocking_query(
-            neo4j, queries.dynamic_channel_query, channels_to_create)
+def process_update(bulk_size: int, config: Config, update_notifier: AIOKafkaConsumer, pool: asyncpg.Pool, neo4j: NEO4J):
 
-    await close_neo4j(neo4j)
+    async def f():
+        update_events.inc()
+        log.info("Update triggered")
+        quota = config.quota_per_update_limit
+        with process_update_time.time():
+            while True:
+                # take quota into consideration
+                curr_fetch = min(quota, bulk_size)*YOUTUBE_CHANNELS_MAX_CHUNK
+                with postgres_fetching_time.time():
+                    values = await pool.fetch(queries.channel_to_update_query, datetime.now() - timedelta(hours=config.update_frequency_h), curr_fetch)
+                parsed_values = [parse_record(value) for value in values]
+                if len(parsed_values) == 0:
+                    # if no items work is finished
+                    break
+                inprogress_update.set(len(values))
+                quota_exceeded = await asyncio.gather(*[process_channels_chunk(chunk, pool, neo4j) for chunk in chunked(YOUTUBE_CHANNELS_MAX_CHUNK, parsed_values)])
+                quota -= sum(1 for exceeded in quota_exceeded if not exceeded)
+                # handle Quotaexceeded if even one exceeded
+                if quota <= 0 or any(exceeded for exceeded in quota_exceeded):
+                    log.warning("quota exceeded %s")
+                    app_state.state('waiting_for_quota')
+                    # throw away all old updates
+                    await update_notifier.getmany(timeout_ms=0)
+                    while True:
+                        update = await update_notifier.getmany(timeout_ms=10 * 1000)
+                        for tp, messages in update.items():
+                            if messages:
+                                # if any update break
+                                quota = config.quota_per_update_limit
+                                app_state.state('running')
+                                break
+        log.info("Update finished")
+    return f
 
 
-async def insert_update(pool: asyncpg.Pool, channels: 'list[Channel]', potentialy_wrong_channels_ids: 'list[ChannelId]'):
-    if len(channels) == 0 and len(potentialy_wrong_channels_ids) == 0:
-        return
-    channels_to_update = list(map(queries.channel_to_update, channels))
-    if len(channels) != len(potentialy_wrong_channels_ids):
-        error_update_time = datetime.now() + TIMEDELTA_WRONG_DATA_UPDATE
-        channels_to_update.extend(map(queries.to_update(error_update_time), {
-                                  i.channel_id for i in channels}.symmetric_difference(potentialy_wrong_channels_ids)))
-        log.info("number of errous channel_id %d", len(
-            potentialy_wrong_channels_ids)-len(channels))
-    async with pool.acquire() as con:
-        await con.executemany(queries.update_insert_query, channels_to_update)
-        log.debug("inserted to postgres %d updated", len(channels))
-
-
-async def main(data: ChannelsConfig):
-    log.info("update frequency: %d", data.update_frequency)
+async def main(data: Config):
+    start_http_server(8000)
+    configuration.info({'update_frequency': str(
+        data.update_frequency_h), "quota_per_update_limit": str(data.quota_per_update_limit)})
+    log.info("update_frequency_h: %f and quota_per_update_limit: %d",
+             data.update_frequency_h, data.quota_per_update_limit)
     channelConsumer = AIOKafkaConsumer(
         'new_channels',
         bootstrap_servers='kafka:9092',
         enable_auto_commit=False,      # Will disable autocommit
         auto_offset_reset="earliest",  # If committed offset not found, start from beginning
-        group_id="channelModule"
+        group_id="channelModule",
+        key_deserializer=lambda key: key.decode("utf-8") if key else "",
     )
     updateConsumer = AIOKafkaConsumer(
         'updates',
         bootstrap_servers='kafka:9092',
-        enable_auto_commit=True,
-        auto_offset_reset="latest",
+        auto_offset_reset="latest"
     )
     postgres_pool = asyncpg.create_pool(
-        user=user, password=password, database=dbname, host=host, command_timeout=5)
+        user=USER, password=PASSWORD, database=DBNAME, host=HOST)
+    neo4j = GraphDatabase.driver(
+        NEO4J_BOLT_URL, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
     _, _, pool = await asyncio.gather(channelConsumer.start(), updateConsumer.start(), postgres_pool)
-    if not pool:
+    if not pool or not neo4j:
         raise NotImplementedError("no connctions")
     try:
-        input_channel = asyncio.Queue()
-        update_channel = asyncio.Queue()
-        processing_channel = asyncio.Queue()
-        new_channels: 'set[ChannelId]' = set()
-        asyncio.create_task(kafka_produce(channelConsumer, input_channel))
-        asyncio.create_task(kafka_produce(updateConsumer, update_channel))
-        asyncio.create_task(process_filter(channelConsumer,
-                                           pool, input_channel, processing_channel, new_channels))
-        asyncio.create_task(process_update(
-            pool, data.update_frequency, update_channel, processing_channel))
-        # long waiting chunk for youtube
-        # add all items to set
-        async for channels_ids in get_new_chunk_queue(processing_channel, 30, YOUTUBE_CHANNELS_MAX_CHUNK):
-            # timeout even for one day
-            log.debug("fetching data from youtube")
-            channels = await fetch_channels_from_yt(channels_ids)
-            await push_to_neo4j(channels, new_channels)
-            await insert_update(pool, channels, channels_ids)
-            new_channels.difference_update(channels_ids)
-
+        tasks = []
+        tasks.append(kafka_callback_bulk(100, channelConsumer,
+                                         process_channel_messages(pool)))
+        if data.update_frequency_h > 0 and data.quota_per_update_limit > 0:
+            tasks.append(update_trigger(data.update_frequency_h, process_update(
+                1, data, updateConsumer, pool, neo4j)))
+        await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(channelConsumer.stop(), updateConsumer.stop(), pool.close())
+        neo4j.close()
 
 
 if __name__ == "__main__":

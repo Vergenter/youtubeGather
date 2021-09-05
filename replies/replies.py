@@ -22,7 +22,7 @@ import queries
 from kafka.structs import TopicPartition
 from utils.connection import Neo4jConnection
 from utils.sync_to_async import run_in_executor
-from utils.chunk_gen import get_new_chunk_iter, get_new_chunk_queue
+from utils.chunk import get_new_chunk_iter
 
 import asyncpg
 from replies_model import ParentMessage, from_dict
