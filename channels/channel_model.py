@@ -73,4 +73,4 @@ def from_json(json: Any):
 
 
 def get_empty_channel(channelId: ChannelId):
-    return {"channelId": channelId, "public": False, "update": datetime.now()}
+    return {"channel_id": channelId, "public": False, "update": datetime.now()}

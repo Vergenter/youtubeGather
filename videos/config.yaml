@@ -1,1 +1,2 @@
-update_frequency: 1
+update_frequency_h: 12
+quota_per_update_limit: 125

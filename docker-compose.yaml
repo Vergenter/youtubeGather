@@ -113,6 +113,7 @@ services:
     volumes:
       - ./utils:/videos/utils
       - ./rejected:/videos/rejected
+      
   zookeeper:
     restart: unless-stopped
     image: confluentinc/cp-zookeeper:latest

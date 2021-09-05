@@ -59,23 +59,22 @@ postgres_inserting_new_time = channels_io_time.labels(
 postgres_fetching_time = channels_io_time.labels(operation='postgres_fetching')
 postgres_insert_time = channels_io_time.labels(operation='postgres_insert')
 
-channels_messages_total = Counter(
-    'channels_messages_total', "messages processed from new_channels kafka topic", ['state'])
-rejected_messages = channels_messages_total.labels(state='rejected')
-process_messages = channels_messages_total.labels(state='process')
+process_messages = Counter('channels_process_messages',
+                           "messages processed from new_channels kafka topic")
 
 update_events = Counter("channels_update_events",
                         "updates triggered in program")
 quota_usage = Counter("quota_usage", "usage of quota in replies module")
-wrong_channels = Counter("channels_wrong_channels",
-                         "channels that are wrong or don't exists")
 inserted_neo4j = Counter("channels_inserted_neo4j",
                          "channels inserted to neo4j database")
 process_update_time = Histogram(
     "channels_process_time", "processing time in seconds[s]", buckets=BUCKETS_FOR_WAITING_FOR_QUOTA)
 
-inprogress_update = Gauge('channels_inprogress_updates',
-                          'inprogress comment_id to fetch childrens')
+channels_updated_channels = Counter(
+    "channels_updated_channels", "updated channels count", ["state"])
+updated_channels = channels_updated_channels.labels(state="success")
+rejected_updates = channels_updated_channels.labels(state="rejected")
+wrong_channels = channels_updated_channels.labels(state="wrong")
 
 
 async def kafka_callback_bulk(bulk_size: int, consumer: AIOKafkaConsumer, callback: Callable[[list[ConsumerRecord]], Awaitable[None]]):
@@ -120,9 +119,9 @@ async def fetch_channels_from_yt(channels_ids: 'set[ChannelId]'):
             youtube_api = await aiogoogle.discover('youtube', 'v3')
             req = youtube_api.channels.list(
                 part=YOUTUBE_CHANNELS_PART, id=",".join(channels_ids), maxResults=YOUTUBE_CHANNELS_MAX_CHUNK, hl="en_US")   # type: ignore
-            quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
             try:
                 result = await aiogoogle.as_api_key(req)
+                quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
             except HTTPError as err:
                 if err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
                     raise QuotaError
@@ -134,7 +133,7 @@ async def fetch_channels_from_yt(channels_ids: 'set[ChannelId]'):
             parsed.append(from_json(item))
         except KeyError:
             rejected.append(item)
-            rejected_messages.inc()
+            rejected_updates.inc()
     if len(rejected) > 0:
         with open(f'./rejected/channels-{datetime.now()}.json', 'w') as f:
             json.dump(rejected, f)
@@ -153,7 +152,6 @@ async def process_channels_chunk(old_updates: list[Tuple[ChannelId, datetime]], 
     try:
         channels = await fetch_channels_from_yt(channel_ids)
     except QuotaError:
-        inprogress_update.dec(len(old_updates))
         return True
     fetched_channels_ids = {channel.channel_id for channel in channels}
     wrong_new_channels = [a[0] for a in old_updates if a[1] ==
@@ -189,7 +187,7 @@ async def process_channels_chunk(old_updates: list[Tuple[ChannelId, datetime]], 
         id_not_to_update(i) for i in wrong_new_channels]
     with postgres_insert_time.time():
         await pool.executemany(queries.update_insert_query, updates)
-    inprogress_update.dec(len(old_updates))
+    updated_channels.inc()
     return False
 
 
@@ -213,7 +211,6 @@ def process_update(bulk_size: int, config: Config, update_notifier: AIOKafkaCons
                 if len(parsed_values) == 0:
                     # if no items work is finished
                     break
-                inprogress_update.set(len(values))
                 quota_exceeded = await asyncio.gather(*[process_channels_chunk(chunk, pool, neo4j) for chunk in chunked(YOUTUBE_CHANNELS_MAX_CHUNK, parsed_values)])
                 quota -= sum(1 for exceeded in quota_exceeded if not exceeded)
                 # handle Quotaexceeded if even one exceeded

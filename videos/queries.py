@@ -14,9 +14,9 @@ def to_update(update: datetime):
     return channel_id_to_update
 
 
-videos_update_query = 'select distinct video_id from videos.videos where video_id not in (select video_id from videos.videos where update > $1);'
-new_videos_query = 'SELECT id FROM unnest($1::text[]) as V(id) EXCEPT SELECT video_id FROM videos.videos;'
+videos_to_update_query = 'select video_id,max(update) from videos.videos where video_id not in (select video_id from videos.videos where update > $1) group by video_id limit $2;'
 update_insert_query = 'INSERT INTO videos.videos VALUES ($1,$2)'
+update_insert_new_query = 'INSERT INTO videos.videos VALUES ($1,$2) ON CONFLICT DO NOTHING'
 
 static_video_query = '''
 UNWIND $rows AS row
@@ -103,3 +103,15 @@ CREATE (videoStatistics:VideoStatistics{
 with videoStatistics,row,video
 CREATE (videoStatistics)-[:OF{at: row.update}]->(video)
 '''
+
+empty_video_insert_query = """
+UNWIND $rows AS row
+with row
+    MERGE (video:Video{videoId: row.video_id})
+with row, video
+CREATE (videoStatistics:VideoStatistics{
+    public: row.public
+    })
+with videoStatistics,row,video
+CREATE (videoStatistics)-[:OF{at: row.update}]->(video)
+"""

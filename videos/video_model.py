@@ -88,3 +88,7 @@ def from_json(json: Any):
         localizations=list(json.get("localizations", [])),
         update=datetime.now()
     )
+
+
+def get_empty_video(videoId: VideoId):
+    return {"video_id": videoId, "public": False, "update": datetime.now()}
