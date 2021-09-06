@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
-from utils.types import ChannelId, CommentId, ReplyId, VideoId
+from utils.types import ChannelId, CommentId, ReplyId
 
 
 @dataclass

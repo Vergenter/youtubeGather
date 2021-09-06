@@ -1,7 +1,31 @@
-to_update_query = 'select distinct toUpdate.parent_id from replies.parent_comments toUpdate where toUpdate.parent_id not in (select updated.parent_id from replies.parent_comments updated where updated.update > $1);'
-new_parent_query = 'SELECT parent_id FROM unnest($1::text[]) as V(parent_id) EXCEPT SELECT existing.parent_id FROM replies.parent_comments existing;'
-parent_update_exist_query = 'select exists(select 1 from replies.parent_comments where parent_id=$1 and update=$2)'
-updated_insert_query = "INSERT INTO replies.parent_comments VALUES ($1,$2) ON CONFLICT DO NOTHING"
+
+from datetime import datetime
+from typing import Tuple
+
+import asyncpg
+from utils.types import CommentId
+
+
+def to_update(update: datetime):
+    def channel_id_to_update(comment_id: CommentId):
+        return (comment_id, update)
+    return channel_id_to_update
+
+
+async def upsert(records: list[Tuple], pool: asyncpg.Pool):
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute('CREATE TEMP TABLE IF NOT EXISTS tmptable (LIKE "replies"."insuficient_parent_comments")')
+            await conn.execute('TRUNCATE tmptable')
+            await conn.copy_records_to_table('tmptable', records=records)
+            return await conn.fetch('INSERT INTO "replies"."insuficient_parent_comments" SELECT * FROM tmptable ON CONFLICT DO NOTHING RETURNING *')
+
+
+parents_to_update_query = 'select parent_id,max(update) from replies.parent_comments where parent_id not in (select parent_id from replies.parent_comments where update > $1) group by parent_id limit $2;'
+upsert_full_parent_query = "INSERT INTO replies.insuficient_parent_comments VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING parent_id, update"
+update_insert_new_query = "INSERT INTO replies.parent_comments VALUES ($1,$2) ON CONFLICT DO NOTHING"
+updated_insert_query = 'INSERT INTO replies.parent_comments VALUES ($1,$2)'
+
 all_comment_query = '''
 UNWIND $rows AS row
 with row
