@@ -1,7 +1,22 @@
-videos_update_query = 'select distinct video_id from comments.videos_comments where video_id not in (select video_id from comments.videos_comments where update > $1;'
-new_videos_query = 'SELECT id FROM unnest($1::text[]) as V(id) EXCEPT SELECT video_id FROM comments.videos_comments;'
-new_video_query = "select exists(select 1 from comments.videos_comments where video_id=$1 limit 1)"
+from datetime import datetime
+from utils.types import CommentId, VideoId
+
+
+def to_update_videos(update: datetime):
+    def channel_id_to_update(video_id: VideoId):
+        return (video_id, update)
+    return channel_id_to_update
+
+
+def to_update(update: datetime):
+    def channel_id_to_update(comment_id: CommentId):
+        return (comment_id, update)
+    return channel_id_to_update
+
+
+videos_to_update_query = 'select video_id,max(update) from comments.videos_comments where video_id not in (select video_id from comments.videos_comments where update > $1) group by video_id limit $2;'
 updated_insert_query = 'INSERT INTO comments.videos_comments VALUES ($1,$2)'
+update_insert_new_query = 'INSERT INTO comments.videos_comments VALUES ($1,$2) ON CONFLICT DO NOTHING'
 
 all_comment_query = '''
 UNWIND $rows AS row
@@ -29,3 +44,33 @@ CREATE (commentStatistics:CommentStatistics{
 with commentStatistics,row,comment
 CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)
 '''
+
+comment_static_insert_query = """
+UNWIND $rows AS row
+with row
+MERGE (comment:Comment{commentId: row.comment_id})
+with row,comment
+FOREACH(ignoreMe IN CASE WHEN row.authorChannelId IS NOT NULL THEN [1] ELSE [] END |
+    MERGE (channel:Channel{channelId: row.authorChannelId})
+    MERGE (comment)-[:OWNED_BY]->(channel)
+)
+with row,comment
+MERGE (video:Video{videoId: row.video_id})
+MERGE (comment)-[:TO]->(video)
+with row, comment
+SET comment.publishedAt= row.publishedAt,
+    comment.authorDisplayName= row.authorDisplayName
+"""
+
+comment_dynamic_insert_query = """
+UNWIND $rows AS row
+CREATE (commentStatistics:CommentStatistics{
+    textOriginal: row.textOriginal,
+    updatedAt: row.updatedAt,
+    likeCount: row.likeCount,
+    totalReplyCount: row.totalReplyCount,
+    isPublic: row.isPublic
+    })
+MERGE (comment:Comment{commentId: row.comment_id})
+CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)
+"""

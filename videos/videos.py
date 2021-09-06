@@ -9,9 +9,9 @@ from datetime import datetime, timedelta
 from dataclasses import asdict, dataclass
 import json
 import os
-from typing import Any, Awaitable, Callable, Coroutine, Tuple, Union
+from typing import Any, Awaitable, Callable, Tuple, Union
 from utils.sync_to_async import run_in_executor
-from prometheus_client import Counter, Gauge, start_http_server, Histogram, Enum, Info
+from prometheus_client import Counter, start_http_server, Histogram, Enum, Info
 
 from aiogoogle.client import Aiogoogle
 from aiogoogle.excs import HTTPError
@@ -28,7 +28,7 @@ from quota_error import QuotaError
 import logging
 
 NEO4J = Union[BoltDriver, Neo4jDriver]
-LOGGER_NAME = "CHANNELS"
+LOGGER_NAME = "VIDEOS"
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
                     level=os.environ.get("LOGLEVEL", "INFO"), datefmt='%Y-%m-%d %H:%M:%S')
 log = logging.getLogger(LOGGER_NAME)
@@ -280,7 +280,7 @@ async def main(data: Config):
                                          process_video_messages(pool)))
         if data.update_frequency_h > 0 and data.quota_per_update_limit > 0:
             tasks.append(update_trigger(data.update_frequency_h, process_update(
-                1, data, updateConsumer, pool, neo4j, producer)))
+                10, data, updateConsumer, pool, neo4j, producer)))
         await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(videosConsumer.stop(), updateConsumer.stop(), pool.close(), producer.stop())

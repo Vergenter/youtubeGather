@@ -263,7 +263,7 @@ async def main(data: Config):
                                          process_channel_messages(pool)))
         if data.update_frequency_h > 0 and data.quota_per_update_limit > 0:
             tasks.append(update_trigger(data.update_frequency_h, process_update(
-                1, data, updateConsumer, pool, neo4j)))
+                10, data, updateConsumer, pool, neo4j)))
         await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(channelConsumer.stop(), updateConsumer.stop(), pool.close())
