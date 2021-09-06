@@ -19,10 +19,11 @@ SET comment.publishedAt= row.publishedAt,
     comment.authorDisplayName= row.authorDisplayName
 with row,comment
 CREATE (commentStatistics:CommentStatistics{
+    from: row.update,
     textOriginal: row.textOriginal,
     updatedAt: row.updatedAt,
     likeCount: row.likeCount
     })
 with commentStatistics,row,comment
-CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)
+CREATE (commentStatistics)-[:OF]->(comment)
 '''

@@ -54,6 +54,7 @@ with row
     MERGE (channel:Channel{channelId: row.channel_id})
 with row,channel
 CREATE (channelStatistics:ChannelStatistics{
+    from: row.update,
     viewCount: row.viewCount,
     subscriberCount: row.subscriberCount,
     videoCount: row.videoCount,
@@ -63,7 +64,7 @@ CREATE (channelStatistics:ChannelStatistics{
     moderateComments: row.moderateComments
     })
 with channelStatistics,row,channel
-CREATE (channelStatistics)-[:OF{at: row.update}]->(channel)
+CREATE (channelStatistics)-[:OF]->(channel)
 """
 
 empty_channel_insert_query = """
@@ -72,8 +73,9 @@ with row
     MERGE (channel:Channel{channelId: row.channel_id})
 with row,channel
 CREATE (channelStatistics:ChannelStatistics{
+    from: row.update,
     public: row.public
     })
 with channelStatistics,row,channel
-CREATE (channelStatistics)-[:OF{at: row.update}]->(channel)
+CREATE (channelStatistics)-[:OF]->(channel)
 """

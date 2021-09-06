@@ -115,6 +115,7 @@ def process_video_messages(pool: asyncpg.Pool):
 async def update_trigger(frequency_h: float, callback: Callable[[], Awaitable[None]]):
     update_delta = timedelta(hours=frequency_h)
     while True:
+        log.info("Try update")
         await asyncio.gather(callback(), asyncio.sleep(update_delta.total_seconds()))
 
 
@@ -202,7 +203,7 @@ async def process_videos_chunk(old_updates: list[Tuple[VideoId, datetime]], pool
         id_not_to_update(i) for i in wrong_new_videos]
     with postgres_insert_time.time():
         await pool.executemany(queries.update_insert_query, updates)
-    await asyncio.gather(*[kafka_produce_channel_id(channel_id, producer) for channel_id in {video.channel_id for video in videos}])
+    await asyncio.gather(*[kafka_produce_channel_id(channel_id, producer) for channel_id in {video.channel_id for video in videos if video.video_id in ok_new_videos}])
     updated_videos.inc(len(updates))
     return False
 

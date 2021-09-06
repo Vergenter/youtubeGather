@@ -187,7 +187,7 @@ async def process_channels_chunk(old_updates: list[Tuple[ChannelId, datetime]], 
         id_not_to_update(i) for i in wrong_new_channels]
     with postgres_insert_time.time():
         await pool.executemany(queries.update_insert_query, updates)
-    updated_channels.inc()
+    updated_channels.inc(len(old_updates))
     return False
 
 

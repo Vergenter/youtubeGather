@@ -12,6 +12,5 @@ def from_yaml(config):
     return Config(
         data_update_period_d=config.get("data_update_period_d", 0),
         update_attempt_period_h=config.get("update_attempt_period_h", 24),
-        quota_per_attempt_limit=config.get("quota_per_day_limit", 0)
+        quota_per_attempt_limit=config.get("quota_per_attempt_limit", 0)
     )
-

@@ -9,14 +9,29 @@ def main():
         ASSERT v.videoId IS UNIQUE""")
 
     conn.query("""
+        CREATE CONSTRAINT video_statistics_unique IF NOT EXISTS
+        ON (cs:VideoStatistics)
+        ASSERT cs.from IS UNIQUE""")
+
+    conn.query("""
         CREATE CONSTRAINT channel_id_unique IF NOT EXISTS
         ON (c:Channel)
         ASSERT c.channelId IS UNIQUE""")
 
     conn.query("""
+        CREATE CONSTRAINT channel_statistics_unique IF NOT EXISTS
+        ON (cs:ChannelStatistics)
+        ASSERT cs.from IS UNIQUE""")
+
+    conn.query("""
         CREATE CONSTRAINT comment_id_unique IF NOT EXISTS
         ON (c:Comment)
         ASSERT c.commentId IS UNIQUE""")
+
+    conn.query("""
+        CREATE CONSTRAINT comment_statistics_unique IF NOT EXISTS
+        ON (cs:CommentStatistics)
+        ASSERT cs.from IS UNIQUE""")
 
     conn.query("""
         CREATE CONSTRAINT game_title_unique IF NOT EXISTS

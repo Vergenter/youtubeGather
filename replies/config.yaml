@@ -1,1 +1,4 @@
-update_frequency: 14
+data_update_period_d: 7
+update_attempt_period_h: 6
+quota_per_attempt_limit: 460
+#1840 / 4 = 460

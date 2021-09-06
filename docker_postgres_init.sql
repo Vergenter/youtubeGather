@@ -23,7 +23,7 @@ CREATE SCHEMA videos
 		video_id text NOT NULL,
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT video_id_update PRIMARY KEY(video_id,update)
-	)
+	);
 
 CREATE DATABASE commentdb
     WITH 
@@ -57,4 +57,9 @@ CREATE SCHEMA replies;
 		parent_id text NOT NULL,
 		update TIMESTAMP NOT NULL,
 		CONSTRAINT parent_id_update PRIMARY KEY(parent_id,update)
+	)
+	CREATE TABLE replies.insuficient_parent_comments (
+		parent_id text NOT NULL,
+		update TIMESTAMP NOT NULL,
+		CONSTRAINT insuficient_parent_id_update PRIMARY KEY(parent_id,update)
 	);

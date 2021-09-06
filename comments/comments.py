@@ -142,39 +142,38 @@ def parse_comments(page_items) -> list[CommentThread]:
 
 async def fetch_comments_from_yt(video_id: VideoId, quota: QuotaManager):
     async with Aiogoogle(api_key=DEVELOPER_KEY) as aiogoogle:
-        with youtube_fetching_time.time():
-            youtube_api = await aiogoogle.discover('youtube', 'v3')
-            req = youtube_api.commentThreads.list(
-                part="snippet,replies", videoId=video_id,  # type: ignore
-                maxResults=YOUTUBE_COMMENTS_THREAD_CHUNK)  # type: ignore
-            while True:
-                try:
-                    await quota.get_quota(YOUTUBE_FETCH_QUOTA_COST)
-                    with youtube_fetching_time.time():
-                        full_res: Response = await aiogoogle.as_api_key(req, full_res=True)
+        youtube_api = await aiogoogle.discover('youtube', 'v3')
+        req = youtube_api.commentThreads.list(
+            part="snippet,replies", videoId=video_id,  # type: ignore
+            maxResults=YOUTUBE_COMMENTS_THREAD_CHUNK)  # type: ignore
+        while True:
+            try:
+                await quota.get_quota(YOUTUBE_FETCH_QUOTA_COST)
+                with youtube_fetching_time.time():
+                    full_res: Response = await aiogoogle.as_api_key(req, full_res=True)
 
-                except HTTPError as err:
-                    quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
-                    if err.res.status_code == 404 and err.res.content['error']['errors'][0]['reason'] == "videoNotFound":
-                        log.warning("Incorrect video_id %s", video_id)
-                        raise InputError(video_id, "Video id is incorrect")
-                    elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "commentsDisabled":
-                        log.warning("Comments disabled %s", video_id)
-                        raise InputError(video_id, "Comments disabled")
-                    elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
-                        log.error("QuotaExceeded error")
-                        quota.quota_exceeded()
-                        continue
-                    raise
-                _duration = 0
+            except HTTPError as err:
+                quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
+                if err.res.status_code == 404 and err.res.content['error']['errors'][0]['reason'] == "videoNotFound":
+                    log.warning("Incorrect video_id %s", video_id)
+                    raise InputError(video_id, "Video id is incorrect")
+                elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "commentsDisabled":
+                    log.warning("Comments disabled %s", video_id)
+                    raise InputError(video_id, "Comments disabled")
+                elif err.res.status_code == 403 and err.res.content['error']['errors'][0]['reason'] == "quotaExceeded":
+                    log.error("QuotaExceeded error")
+                    quota.quota_exceeded()
+                    continue
+                raise
+            _duration = 0
+            _start = default_timer()
+            async for page in get_pages(full_res, quota, YOUTUBE_FETCH_QUOTA_COST):
+                _duration += max(default_timer() - _start, 0)
+                quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
+                yield parse_comments(page)
                 _start = default_timer()
-                async for page in get_pages(full_res, quota, YOUTUBE_FETCH_QUOTA_COST):
-                    _duration += max(default_timer() - _start, 0)
-                    quota_usage.inc(YOUTUBE_FETCH_QUOTA_COST)
-                    yield parse_comments(page)
-                    _start = default_timer()
-                youtube_fetching_time.observe(_duration)
-                break
+            youtube_fetching_time.observe(_duration)
+            break
 
 
 @run_in_executor
@@ -211,9 +210,11 @@ async def process_video_id(old_update: Tuple[VideoId, datetime], quota: QuotaMan
             push_to_neo4j = neo4j_query(
                 queries.all_comment_query, comments, neo4j)
             updated_comments.inc(len(comments))
-            await asyncio.gather(push_to_neo4j, *kafka_emit)
+            await push_to_neo4j
+            # wait then send to avoid Neo.TransientError.Transaction.DeadlockDetected
+            await asyncio.gather(*kafka_emit)
     except InputError:
-        if old_update[1] != NEW_DATA:
+        if old_update[1] == NEW_DATA:
             update = datetime.now()+TIMEDELTA_WRONG_DATA_UPDATE
             wrong_videos.inc()
     with postgres_insert_time.time():
@@ -236,7 +237,7 @@ def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NE
         with process_update_time.time():
             while True:
                 # take quota into consideration
-                curr_fetch = min(config.quota_per_attempt_limit, bulk_size)
+                curr_fetch = min(quota.read_quota(), bulk_size)
                 with postgres_fetching_time.time():
                     values = await pool.fetch(queries.videos_to_update_query, datetime.now() - timedelta(days=config.data_update_period_d), curr_fetch)
                 parsed_values = [parse_record(value) for value in values]
@@ -250,10 +251,13 @@ def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NE
 
 async def main(data: Config):
     start_http_server(8000)
-    configuration.info({'update_frequency_d': str(
-        data.data_update_period_d), "quota_per_day_limit": str(data.quota_per_attempt_limit)})
-    log.info("update_frequency_h: %f and quota_per_update_limit: %d",
-             data.data_update_period_d, data.quota_per_attempt_limit)
+    configuration.info({
+        'data_update_period_d': str(data.data_update_period_d),
+        "quota_per_attempt_limit": str(data.quota_per_attempt_limit),
+        "update_attempt_period_h": str(data.update_attempt_period_h)
+    })
+    log.info("data_update_period_d: %f and quota_per_attempt_limit: %d and update_attempt_period_h: %d",
+             data.data_update_period_d, data.quota_per_attempt_limit, data.update_attempt_period_h)
     videosConsumer = AIOKafkaConsumer(
         'new_videos',
         bootstrap_servers='kafka:9092',
@@ -276,7 +280,7 @@ async def main(data: Config):
                                          process_video_messages(pool)))
         if data.data_update_period_d > 0 and data.quota_per_attempt_limit > 0:
             tasks.append(update_trigger(data.update_attempt_period_h, process_update(
-                10, data, pool, neo4j, producer)))
+                3, data, pool, neo4j, producer)))
         await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(videosConsumer.stop(),  pool.close(), producer.stop())

@@ -8,12 +8,6 @@ def to_update_videos(update: datetime):
     return channel_id_to_update
 
 
-def to_update(update: datetime):
-    def channel_id_to_update(comment_id: CommentId):
-        return (comment_id, update)
-    return channel_id_to_update
-
-
 videos_to_update_query = 'select video_id,max(update) from comments.videos_comments where video_id not in (select video_id from comments.videos_comments where update > $1) group by video_id limit $2;'
 updated_insert_query = 'INSERT INTO comments.videos_comments VALUES ($1,$2)'
 update_insert_new_query = 'INSERT INTO comments.videos_comments VALUES ($1,$2) ON CONFLICT DO NOTHING'
@@ -35,6 +29,7 @@ SET comment.publishedAt= row.publishedAt,
     comment.authorDisplayName= row.authorDisplayName
 with row,comment
 CREATE (commentStatistics:CommentStatistics{
+    from: row.update,
     textOriginal: row.textOriginal,
     updatedAt: row.updatedAt,
     likeCount: row.likeCount,
@@ -42,7 +37,7 @@ CREATE (commentStatistics:CommentStatistics{
     isPublic: row.isPublic
     })
 with commentStatistics,row,comment
-CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)
+CREATE (commentStatistics)-[:OF]->(comment)
 '''
 
 comment_static_insert_query = """
@@ -65,6 +60,7 @@ SET comment.publishedAt= row.publishedAt,
 comment_dynamic_insert_query = """
 UNWIND $rows AS row
 CREATE (commentStatistics:CommentStatistics{
+    from: row.update,
     textOriginal: row.textOriginal,
     updatedAt: row.updatedAt,
     likeCount: row.likeCount,
@@ -72,5 +68,5 @@ CREATE (commentStatistics:CommentStatistics{
     isPublic: row.isPublic
     })
 MERGE (comment:Comment{commentId: row.comment_id})
-CREATE (commentStatistics)-[:OF{at: row.update}]->(comment)
+CREATE (commentStatistics)-[:OF]->(comment)
 """

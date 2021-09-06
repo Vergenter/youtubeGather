@@ -89,6 +89,7 @@ with row
 MERGE (video:Video{videoId: row.video_id})
 with row, video
 CREATE (videoStatistics:VideoStatistics{
+    from: row.update,
     title: row.title,
     hasCaption: row.hasCaption,
     status: row.status,
@@ -101,7 +102,7 @@ CREATE (videoStatistics:VideoStatistics{
     commentCount: row.commentCount
     })
 with videoStatistics,row,video
-CREATE (videoStatistics)-[:OF{at: row.update}]->(video)
+CREATE (videoStatistics)-[:OF]->(video)
 '''
 
 empty_video_insert_query = """
@@ -110,8 +111,9 @@ with row
     MERGE (video:Video{videoId: row.video_id})
 with row, video
 CREATE (videoStatistics:VideoStatistics{
+    from: row.update,
     public: row.public
     })
 with videoStatistics,row,video
-CREATE (videoStatistics)-[:OF{at: row.update}]->(video)
+CREATE (videoStatistics)-[:OF]->(video)
 """
