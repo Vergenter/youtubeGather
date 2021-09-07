@@ -1,7 +1,8 @@
+from quota_manager import QuotaManager
 import logging
 import os
 from aiogoogle.excs import HTTPError
-from comment_model import QuotaManager
+
 from aiogoogle.models import Response
 LOGGER_NAME = "COMMENTS"
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',

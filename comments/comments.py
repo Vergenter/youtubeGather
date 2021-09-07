@@ -1,11 +1,12 @@
 import asyncio
+from quota_manager import QuotaManager
 import pickle
 from custom_pagination import get_pages
 from timeit import default_timer
 
 from aiogoogle.models import Response
 from input_error import InputError
-from comment_model import CommentThread, QuotaManager, from_json
+from comment_model import CommentThread, from_json
 
 from aiokafka.producer.producer import AIOKafkaProducer
 from utils.times import BUCKETS_FOR_DATABASE_IO, BUCKETS_FOR_WAITING_FOR_QUOTA
@@ -227,13 +228,11 @@ def parse_record(record) -> Tuple[VideoId, datetime]:
     return (VideoId(record[0]), record[1])
 
 
-def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NEO4J, producer: AIOKafkaProducer):
+def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NEO4J, producer: AIOKafkaProducer, quota: QuotaManager):
 
     async def f():
         update_events.inc()
         log.info("Update triggered")
-        quota = QuotaManager(config.quota_per_attempt_limit,
-                             config.quota_per_attempt_limit, config.update_attempt_period_h)
         with process_update_time.time():
             while True:
                 # take quota into consideration
@@ -274,13 +273,15 @@ async def main(data: Config):
     pool, *_ = await asyncio.gather(postgres_pool, videosConsumer.start(),  producer.start())
     if not pool or not neo4j:
         raise NotImplementedError("no connections")
+    quota = QuotaManager(config.quota_per_attempt_limit,
+                         config.quota_per_attempt_limit, config.update_attempt_period_h)
     try:
         tasks = []
         tasks.append(kafka_callback_bulk(100, videosConsumer,
                                          process_video_messages(pool)))
         if data.data_update_period_d > 0 and data.quota_per_attempt_limit > 0:
             tasks.append(update_trigger(data.update_attempt_period_h, process_update(
-                3, data, pool, neo4j, producer)))
+                3, data, pool, neo4j, producer, quota)))
         await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(videosConsumer.stop(),  pool.close(), producer.stop())

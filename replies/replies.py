@@ -145,7 +145,8 @@ def process_video_messages(pool: asyncpg.Pool, neo4j: NEO4J):
         with process_message_time.time():
             parent_messages: list[ParentMessage] = [parsed for parsed in (
                 parse_messages(c) for c in messages) if parsed is not None and len(parsed.replies) != 0]
-            full_update = {(parent_message.parent_id, parent_message.replies[0].update): parent_message.replies for parent_message in parent_messages if parent_message.total_replies < 6}
+            full_update = {(parent_message.parent_id, parent_message.replies[0].update)
+                            : parent_message.replies for parent_message in parent_messages if parent_message.total_replies < 6}
             partial_update = {
                 parent_message.parent_id for parent_message in parent_messages if parent_message.total_replies > 5}
             tasks = []
@@ -239,13 +240,11 @@ def parse_record(record) -> Tuple[CommentId, datetime]:
     return (CommentId(record[0]), record[1])
 
 
-def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NEO4J):
+def process_update(bulk_size: int, config: Config, pool: asyncpg.Pool, neo4j: NEO4J, quota: QuotaManager):
 
     async def f():
         update_events.inc()
         log.info("Update triggered")
-        quota = QuotaManager(config.quota_per_attempt_limit,
-                             config.quota_per_attempt_limit, config.update_attempt_period_h)
         with process_update_time.time():
             while True:
                 # take quota into consideration
@@ -283,6 +282,8 @@ async def main(data: Config):
     neo4j = GraphDatabase.driver(
         NEO4J_BOLT_URL, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
     pool, *_ = await asyncio.gather(postgres_pool, replyConsumer.start())
+    quota = QuotaManager(data.quota_per_attempt_limit,
+                         data.quota_per_attempt_limit, data.update_attempt_period_h)
     if not pool or not neo4j:
         raise NotImplementedError("no connections")
     try:
@@ -291,7 +292,7 @@ async def main(data: Config):
                                          process_video_messages(pool, neo4j)))
         if data.data_update_period_d > 0 and data.quota_per_attempt_limit > 0 and data.update_attempt_period_h > 0:
             tasks.append(update_trigger(data.update_attempt_period_h, process_update(
-                3, data, pool, neo4j)))
+                3, data, pool, neo4j, quota)))
         await asyncio.gather(*tasks)
     finally:
         await asyncio.gather(replyConsumer.stop(),  pool.close())
