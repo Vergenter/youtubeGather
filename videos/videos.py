@@ -113,10 +113,11 @@ def process_video_messages(pool: asyncpg.Pool):
 
 
 async def update_trigger(frequency_h: float, callback: Callable[[], Awaitable[None]]):
-    update_delta = timedelta(hours=frequency_h)
+    update_delta = timedelta(hours=frequency_h).total_seconds()
     while True:
         log.info("Try update")
-        await asyncio.gather(callback(), asyncio.sleep(update_delta.total_seconds()))
+        await asyncio.gather(callback(), asyncio.sleep(update_delta))
+        log.info("After update and sleep")
 
 
 async def fetch_videos_from_yt(videos_ids: 'set[VideoId]'):
@@ -212,7 +213,7 @@ def parse_record(record) -> Tuple[VideoId, datetime]:
     return (VideoId(record[0]), record[1])
 
 
-def process_update(bulk_size: int, config: Config, update_notifier: AIOKafkaConsumer, pool: asyncpg.Pool, neo4j: NEO4J, producer: AIOKafkaProducer):
+def process_update(bulk_size: int, config: Config, update_notifier: AIOKafkaConsumer, pool: asyncpg.Pool, neo4j: NEO4J, producer: AIOKafkaProducer) -> Callable[[], Awaitable[None]]:
 
     async def f():
         update_events.inc()

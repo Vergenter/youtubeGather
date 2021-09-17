@@ -273,8 +273,8 @@ async def main(data: Config):
     pool, *_ = await asyncio.gather(postgres_pool, videosConsumer.start(),  producer.start())
     if not pool or not neo4j:
         raise NotImplementedError("no connections")
-    quota = QuotaManager(config.quota_per_attempt_limit,
-                         config.quota_per_attempt_limit, config.update_attempt_period_h)
+    quota = QuotaManager(data.quota_per_attempt_limit,
+                         data.quota_per_attempt_limit, data.update_attempt_period_h)
     try:
         tasks = []
         tasks.append(kafka_callback_bulk(100, videosConsumer,
